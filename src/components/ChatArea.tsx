@@ -36,26 +36,26 @@ export function ChatArea({
   const hasStyleSample = styleSample.trim().length > 0;
 
   return (
-    <div className="flex flex-col flex-1 min-w-0 h-full bg-stone-50 overflow-hidden">
+    <div className="flex flex-col flex-1 min-w-0 h-full bg-[#09090b] overflow-hidden">
       {/* Top Navigation Bar */}
-      <div className="h-14 border-b border-stone-200 flex items-center justify-between px-4 bg-white shrink-0 z-10">
+      <div className="h-14 border-b border-zinc-800 flex items-center justify-between px-4 bg-[#0c0c10] shrink-0 z-10">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onOpenSidebar}
-            className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800 md:hidden transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white md:hidden transition-colors cursor-pointer"
             aria-label="Open sidebar"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="text-sm font-semibold text-stone-800 truncate">
+          <div className="text-sm font-semibold text-zinc-200 truncate font-mono">
             {conversation?.title || 'New Email Draft'}
           </div>
         </div>
 
-        {/* Right header actions */}
+        {/* Right Header Status Badges */}
         <div className="flex items-center gap-2 shrink-0">
           {activeTone && (
-            <span className="hidden sm:inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="hidden sm:inline-flex items-center text-xs font-mono px-2 py-0.5 rounded-full bg-purple-950/60 text-purple-300 border border-purple-500/40">
               Tone: {activeTone}
             </span>
           )}
@@ -63,14 +63,14 @@ export function ChatArea({
           <button
             type="button"
             onClick={onOpenStyleModal}
-            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+            className={`flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
               hasStyleSample
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                : 'text-stone-600 border-stone-200 hover:border-emerald-300 hover:text-emerald-700'
+                ? 'bg-purple-950/40 text-purple-300 border-purple-500/40 hover:bg-purple-900/30'
+                : 'text-zinc-400 border-zinc-800 hover:border-purple-500/40 hover:text-purple-300'
             }`}
             title="Configure writing style sample"
           >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
             <span className="hidden sm:inline">
               {hasStyleSample ? 'Style Active' : 'My Style'}
             </span>
@@ -99,12 +99,12 @@ export function ChatArea({
 
               {isLoading && (
                 <div className="flex justify-start w-full animate-in fade-in duration-150">
-                  <div className="bg-white border border-stone-200 rounded-2xl rounded-bl-xs px-4 py-3 shadow-2xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-emerald-600/70 animate-bounce [animation-delay:-0.3s]" />
-                      <div className="w-2 h-2 rounded-full bg-emerald-600/70 animate-bounce [animation-delay:-0.15s]" />
-                      <div className="w-2 h-2 rounded-full bg-emerald-600/70 animate-bounce" />
-                      <span className="text-xs text-stone-400 ml-2">Drafting email...</span>
+                  <div className="bg-[#121217] border border-zinc-800 rounded-2xl rounded-bl-xs px-4 py-3 shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-pink-500 animate-bounce [animation-delay:-0.3s]" />
+                      <div className="w-2 h-2 rounded-full bg-purple-500 animate-bounce [animation-delay:-0.15s]" />
+                      <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" />
+                      <span className="text-xs text-zinc-400 font-mono ml-2">Drafting email...</span>
                     </div>
                   </div>
                 </div>
@@ -115,7 +115,7 @@ export function ChatArea({
         </div>
       </div>
 
-      {/* Bottom Message Composer */}
+      {/* Persistent Message Composer */}
       <MessageComposer
         onSend={onSendMessage}
         isLoading={isLoading}

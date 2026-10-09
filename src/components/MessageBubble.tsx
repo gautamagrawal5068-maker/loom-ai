@@ -20,21 +20,21 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   if (message.isError) {
     return (
       <div className="flex justify-start w-full animate-in fade-in duration-200">
-        <div className="bg-red-50/90 border border-red-200 text-red-700 rounded-2xl rounded-bl-xs px-4 py-3 max-w-[85%] sm:max-w-[75%] shadow-2xs">
+        <div className="bg-red-950/30 border border-red-500/40 text-red-300 rounded-2xl rounded-bl-xs px-4 py-3 max-w-[85%] sm:max-w-[75%] shadow-xs">
           <div className="flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-            <div className="flex-1 text-sm whitespace-pre-wrap leading-relaxed">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm whitespace-pre-wrap leading-relaxed font-sans">
               {message.content}
             </div>
           </div>
           {onRetry && (
-            <div className="mt-2.5 pt-2 border-t border-red-200/60 flex justify-end">
+            <div className="mt-2.5 pt-2 border-t border-red-900/40 flex justify-end">
               <button
                 onClick={onRetry}
-                className="flex items-center gap-1.5 text-xs font-medium text-red-700 hover:text-red-900 bg-red-100/60 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-xs font-mono font-medium text-red-300 hover:text-white bg-red-900/40 hover:bg-red-900/60 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-red-800/50"
               >
                 <RotateCcw className="w-3 h-3" />
-                Retry Request
+                Retry Draft
               </button>
             </div>
           )}
@@ -47,16 +47,15 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   if (isUser) {
     return (
       <div className="flex justify-end w-full animate-in fade-in duration-200">
-        <div className="bg-emerald-600 text-white rounded-2xl rounded-br-xs px-4 py-2.5 max-w-[85%] sm:max-w-[75%] shadow-2xs text-sm whitespace-pre-wrap leading-relaxed font-sans">
+        <div className="bg-gradient-to-r from-purple-900/60 to-pink-900/60 border border-purple-500/30 text-zinc-100 rounded-2xl rounded-br-xs px-4 py-2.5 max-w-[85%] sm:max-w-[75%] shadow-xs text-sm whitespace-pre-wrap leading-relaxed font-sans">
           {message.content}
         </div>
       </div>
     );
   }
 
-  // Assistant Message rendering: Check for email format
+  // Assistant Message rendering: Detect Email Draft layout
   const content = message.content;
-  // Match Subject: or **Subject:** or ### Subject:
   const subjectRegex = /^(?:#{1,3}\s*)?(?:\*{0,2}Subject:\*{0,2}\s*)(.+)$/im;
   const match = content.match(subjectRegex);
 
@@ -86,34 +85,35 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
     };
 
     return (
-      <div className="flex flex-col items-start w-full gap-2 animate-in fade-in duration-200">
-        {/* Optional preamble note from AI */}
+      <div className="flex flex-col items-start w-full gap-2.5 animate-in fade-in duration-200">
+        {/* Preamble commentary if present */}
         {preamble && (
-          <div className="bg-white border border-stone-200 text-stone-700 rounded-2xl rounded-bl-xs px-4 py-2.5 max-w-[85%] sm:max-w-[75%] text-sm whitespace-pre-wrap leading-relaxed shadow-2xs">
+          <div className="bg-[#121217] border border-zinc-800 text-zinc-300 rounded-2xl rounded-bl-xs px-4 py-2.5 max-w-[85%] sm:max-w-[75%] text-sm whitespace-pre-wrap leading-relaxed shadow-xs font-sans">
             {preamble}
           </div>
         )}
 
         {/* Polished Email Draft Card */}
-        <div className="w-full max-w-[90%] sm:max-w-[82%] rounded-2xl border border-stone-200 bg-white shadow-xs overflow-hidden transition-all">
-          {/* Email Draft Header */}
-          <div className="bg-stone-50 border-b border-stone-200 px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-700">
-              <Mail className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Email Draft</span>
+        <div className="w-full max-w-[92%] sm:max-w-[84%] rounded-2xl border border-zinc-800 bg-[#121217] shadow-xl overflow-hidden transition-all hover:border-zinc-700">
+          {/* Header Bar */}
+          <div className="bg-[#181820] border-b border-zinc-800 px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 text-xs font-mono font-semibold text-zinc-300">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+              <Mail className="w-3.5 h-3.5 text-cyan-400" />
+              <span>EMAIL DRAFT</span>
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 onClick={handleCopySubject}
-                className="flex items-center gap-1 text-[11px] font-medium text-stone-600 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 rounded-lg px-2.5 py-1 transition-all cursor-pointer"
                 title="Copy subject line"
               >
                 {copiedSubject ? (
-                  <Check className="w-3 h-3 text-emerald-600" />
+                  <Check className="w-3 h-3 text-cyan-400" />
                 ) : (
-                  <Copy className="w-3 h-3 text-stone-400" />
+                  <Copy className="w-3 h-3 text-zinc-500" />
                 )}
                 <span>{copiedSubject ? 'Copied' : 'Copy Subject'}</span>
               </button>
@@ -121,13 +121,13 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
               <button
                 type="button"
                 onClick={handleCopyBody}
-                className="flex items-center gap-1 text-[11px] font-medium text-stone-600 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 rounded-lg px-2.5 py-1 transition-all cursor-pointer"
                 title="Copy email body"
               >
                 {copiedBody ? (
-                  <Check className="w-3 h-3 text-emerald-600" />
+                  <Check className="w-3 h-3 text-cyan-400" />
                 ) : (
-                  <Copy className="w-3 h-3 text-stone-400" />
+                  <Copy className="w-3 h-3 text-zinc-500" />
                 )}
                 <span>{copiedBody ? 'Copied' : 'Copy Body'}</span>
               </button>
@@ -135,31 +135,31 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
               <button
                 type="button"
                 onClick={handleCopyFull}
-                className="flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2 py-1 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-[11px] font-mono font-medium text-purple-300 hover:text-white bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/40 rounded-lg px-2.5 py-1 transition-all cursor-pointer shadow-xs"
                 title="Copy subject and email body together"
               >
                 {copiedFull ? (
-                  <Check className="w-3 h-3 text-emerald-600" />
+                  <Check className="w-3 h-3 text-cyan-400" />
                 ) : (
-                  <FileText className="w-3 h-3 text-emerald-600" />
+                  <FileText className="w-3 h-3 text-purple-400" />
                 )}
-                <span>{copiedFull ? 'Copied Full' : 'Copy Full'}</span>
+                <span>{copiedFull ? 'Copied' : 'Copy Full'}</span>
               </button>
             </div>
           </div>
 
-          {/* Email Subject Row */}
-          <div className="px-4 py-2.5 border-b border-stone-100 bg-stone-50/30 flex items-baseline gap-2">
-            <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider shrink-0 select-none">
+          {/* Subject Row */}
+          <div className="px-4 py-2.5 border-b border-zinc-800/80 bg-zinc-950/30 flex items-baseline gap-2.5">
+            <span className="text-[11px] font-mono font-semibold text-zinc-500 uppercase tracking-wider shrink-0 select-none">
               Subject:
             </span>
-            <span className="text-sm font-medium text-stone-900 leading-snug">
+            <span className="text-sm font-semibold text-white leading-snug font-sans">
               {rawSubject}
             </span>
           </div>
 
           {/* Email Body */}
-          <div className="p-4 text-sm text-stone-800 whitespace-pre-wrap leading-relaxed font-sans selection:bg-emerald-100">
+          <div className="p-4 text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed font-sans selection:bg-purple-900/50">
             {emailBody}
           </div>
         </div>
@@ -170,7 +170,7 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   // Standard Conversational Assistant Message
   return (
     <div className="flex justify-start w-full animate-in fade-in duration-200">
-      <div className="bg-white border border-stone-200 text-stone-800 rounded-2xl rounded-bl-xs px-4 py-3 max-w-[85%] sm:max-w-[75%] text-sm whitespace-pre-wrap leading-relaxed shadow-2xs font-sans">
+      <div className="bg-[#121217] border border-zinc-800 text-zinc-200 rounded-2xl rounded-bl-xs px-4 py-3 max-w-[85%] sm:max-w-[75%] text-sm whitespace-pre-wrap leading-relaxed shadow-xs font-sans">
         {message.content}
       </div>
     </div>

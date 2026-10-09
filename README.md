@@ -1,167 +1,155 @@
-# LOOM AI
+# LOOM.AI
 
 **Your emails, written the way you would write them.**
 
-LOOM AI is an AI-powered email writing assistant that learns from your writing style and helps you compose natural, personalized emails. Built with Next.js, TypeScript, and Tailwind CSS.
+LOOM AI is a personalized AI email-writing assistant that learns from your writing style, adapts across 6 distinct tones, and crafts natural, bespoke emails.
 
-![LOOM AI](https://img.shields.io/badge/LOOM-AI-emerald?style=for-the-badge)
+Built with **Next.js 15 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase (Auth & PostgreSQL with Row Level Security)**.
 
-## Features
+---
 
-- **Chat Interface** — Multi-turn conversations with persistent message composer, Enter to send, Shift+Enter for new lines
-- **Email Draft Display** — Generated emails shown in a polished draft layout with separate subject/body and one-click copy buttons
-- **Tone Selection** — Support for Formal, Friendly, Assertive, Apologetic, Concise, and Persuasive tones
-- **Conversation Sidebar** — Searchable conversation history with rename, delete, and responsive collapsibility
-- **Writing Style Learning** — Provide an example of your writing and the AI mirrors your patterns
-- **Persistence** — All conversations saved in localStorage, restored on refresh
-- **Responsive Design** — Works on desktop, tablet, and mobile
-- **Modular Backend** — Configurable model API endpoint for any OpenAI-compatible or HuggingFace inference provider
+## 🎨 Visual Identity & Logo Asset
 
-## Tech Stack
+LOOM AI features a near-black (`#09090b`) aesthetic with dark charcoal panels, crisp typography, and restrained neon magenta, purple, electric-blue, and cyan accents.
 
-- [Next.js 15](https://nextjs.org/) (App Router)
-- [TypeScript](https://www.typescriptlang.org/)
-- [Tailwind CSS v4](https://tailwindcss.com/)
-- [Lucide React](https://lucide.dev/) icons
-- [React 19](https://react.dev/)
-
-## Local Setup
-
-### Prerequisites
-
-- Node.js 18+ installed
-- npm 9+ installed
-
-### Steps
-
-1. **Clone and install dependencies:**
-
-   ```bash
-   cd loom-ai
-   npm install
-   ```
-
-2. **Create your environment file:**
-
-   ```bash
-   cp .env.example .env.local
-   ```
-
-3. **Configure your model endpoint** (see [Model Configuration](#model-configuration) below)
-
-4. **Run the development server:**
-
-   ```bash
-   npm run dev
-   ```
-
-5. **Open** [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Model Configuration
-
-LOOM AI requires a compatible model inference API. Set these in `.env.local`:
-
-```env
-MODEL_API_URL=https://your-inference-endpoint.com/v1/chat/completions
-MODEL_API_KEY=your-api-key-here
-```
-
-### Compatible Providers
-
-The API route supports multiple response formats:
-
-| Provider | Format | Example `MODEL_API_URL` |
-|----------|--------|-------------------------|
-| **OpenAI / OpenAI-compatible** | `choices[0].message.content` | `https://api.openai.com/v1/chat/completions` |
-| **HuggingFace Inference Endpoints** | `generated_text` or `[0].generated_text` | `https://xyz.us-east-1.aws.endpoints.huggingface.cloud` |
-| **vLLM / TGI** | OpenAI-compatible | `https://your-server.com/v1/chat/completions` |
-| **Ollama** | `message.content` | `http://localhost:11434/v1/chat/completions` |
-| **Custom** | `content`, `text`, or `response` | Your custom endpoint |
-
-### Using Your HuggingFace Model
-
-Your fine-tuned model at `huggingface.co/gautamagrawal/loom` is a model repository, not a live API. To use it:
-
-1. **Option A: HuggingFace Inference Endpoints** — Deploy the model as a [HuggingFace Inference Endpoint](https://huggingface.co/docs/inference-endpoints/) and use the endpoint URL.
-
-2. **Option B: vLLM** — Run locally with vLLM:
-   ```bash
-   pip install vllm
-   vllm serve gautamagrawal/loom --port 8000
-   ```
-   Then set `MODEL_API_URL=http://localhost:8000/v1/chat/completions`
-
-3. **Option C: Ollama** — Convert and run with Ollama for local inference.
-
-### Without a Model Configured
-
-The app will render correctly and show a clear error message ("Model API is not configured") when you try to send a message. The full UI is functional for exploration.
-
-## Vercel Deployment
-
-1. **Push to GitHub:**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/your-username/loom-ai.git
-   git push -u origin main
-   ```
-
-2. **Deploy on Vercel:**
-   - Go to [vercel.com/new](https://vercel.com/new)
-   - Import your GitHub repository
-   - Vercel auto-detects Next.js — no build settings needed
-   - Add environment variables: `MODEL_API_URL` and `MODEL_API_KEY`
-   - Click **Deploy**
-
-3. **Environment Variables in Vercel:**
-   - Go to your project → Settings → Environment Variables
-   - Add `MODEL_API_URL` and `MODEL_API_KEY` with your production values
-   - Redeploy after adding variables
-
-## Project Structure
-
-```
-loom-ai/
-├── src/
-│   ├── app/
-│   │   ├── api/chat/route.ts    # Server-side chat API endpoint
-│   │   ├── globals.css           # Tailwind CSS + custom styles
-│   │   ├── layout.tsx            # Root layout with metadata
-│   │   └── page.tsx              # Main page composing all components
-│   ├── components/
-│   │   ├── ChatArea.tsx          # Main chat area with messages + composer
-│   │   ├── MessageBubble.tsx     # User/assistant/error/email-draft messages
-│   │   ├── MessageComposer.tsx   # Auto-resizing message input
-│   │   ├── Sidebar.tsx           # Conversation list with search/rename/delete
-│   │   └── WelcomeScreen.tsx     # Welcome screen with suggestions
-│   ├── hooks/
-│   │   ├── useAutoScroll.ts      # Auto-scroll to latest message
-│   │   └── useConversations.ts   # Core state management + persistence
-│   ├── lib/
-│   │   └── storage.ts            # localStorage persistence utilities
-│   └── types/
-│       └── index.ts              # TypeScript type definitions
-├── .env.example                  # Environment variable template
-├── eslint.config.mjs             # ESLint configuration
-├── next.config.mjs               # Next.js configuration
-├── package.json                  # Dependencies and scripts
-├── postcss.config.mjs            # PostCSS configuration for Tailwind
-├── tailwind.config.ts            # Tailwind configuration
-├── tsconfig.json                 # TypeScript configuration
-└── README.md                     # This file
-```
-
-## Scripts
-
+### Logo Asset Placement
+Please ensure the official LOOM AI logo asset is placed at:
 ```bash
-npm run dev      # Start development server
-npm run build    # Production build
-npm run start    # Start production server
-npm run lint     # Run ESLint
+public/loom-logo.png
+```
+*(If the asset is not yet placed, the app will gracefully render an animated glowing orb fallback).*
+
+---
+
+## 🚀 Quick Start (Local Setup)
+
+### 1. Prerequisites
+- Node.js 18+
+- npm 9+
+- A [Supabase](https://supabase.com) account (free tier)
+- *(Optional)* Apple Silicon Mac for local MLX model inference, or any OpenAI-compatible API endpoint
+
+### 2. Install Dependencies
+```bash
+cd loom-ai
+npm install
 ```
 
-## License
+### 3. Environment Variables
+Copy the template to your local environment file:
+```bash
+cp .env.example .env.local
+```
+Fill in the values in `.env.local`:
+```env
+# Model API (e.g. Local MLX server or OpenAI)
+MODEL_API_URL=http://localhost:8080/v1/chat/completions
+MODEL_API_KEY=
 
-MIT
+# Supabase Auth & Database
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 4. Run Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 🗄️ Supabase Database & Security Setup
+
+1. Open your project in the [Supabase Dashboard](https://supabase.com/dashboard).
+2. Go to **SQL Editor** -> **New Query**.
+3. Copy the contents of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**.
+4. This script automatically sets up:
+   - `profiles`: User preferences, category, baseline tone, style sample, and onboarding status.
+   - `conversations`: Chat sessions tied to `auth.users(id)`.
+   - `messages`: Multi-turn messages linked to conversations.
+   - **Row Level Security (RLS)**: Strict policies guaranteeing users can only read, write, or delete their own data.
+   - **Automatic Profile Trigger**: Automatically initializes a user profile row whenever a new user signs up.
+
+---
+
+## 🔑 Google OAuth Setup (Supabase)
+
+To enable "Sign in with Google":
+
+1. **Google Cloud Console**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/) -> **APIs & Services** -> **Credentials**.
+   - Create an **OAuth 2.0 Client ID** (Web Application).
+   - In **Authorized redirect URIs**, add your Supabase Auth callback URL:
+     ```
+     https://<YOUR-PROJECT-ID>.supabase.co/auth/v1/callback
+     ```
+   - Copy the generated **Client ID** and **Client Secret**.
+
+2. **Supabase Dashboard**:
+   - Go to **Authentication** -> **Providers** -> **Google**.
+   - Toggle **Enable Google provider**.
+   - Paste your **Client ID** and **Client Secret**.
+   - Under **URL Configuration**, set:
+     - **Site URL**: `http://localhost:3000` (or `https://your-domain.vercel.app` in production)
+     - **Redirect URLs**: Add both `http://localhost:3000/auth/callback` and `https://your-domain.vercel.app/auth/callback`.
+
+---
+
+## 🤖 Model Inference Setup
+
+LOOM AI connects to any OpenAI-compatible API or your fine-tuned model weights at `huggingface.co/gautamagrawal/loom`.
+
+### Option A: Local MLX Inference on Apple Silicon ($0 Cost)
+Your model was fine-tuned in MLX. You can serve it locally using the built-in `mlx-lm` server:
+```bash
+python3 -m mlx_lm.server --model gautamagrawal/loom --port 8080
+```
+Then configure in `.env.local`:
+```env
+MODEL_API_URL=http://localhost:8080/v1/chat/completions
+MODEL_API_KEY=
+```
+
+### Option B: Cloud or OpenAI-compatible Endpoint
+Set `MODEL_API_URL` to your remote endpoint:
+```env
+MODEL_API_URL=https://api.openai.com/v1/chat/completions
+MODEL_API_KEY=your-api-key
+```
+
+---
+
+## 🚢 Vercel Deployment
+
+1. **Push to GitHub**:
+   ```bash
+   git add .
+   git commit -m "Upgrade LOOM AI with Supabase Auth, Onboarding & Dark Theme"
+   git push origin main
+   ```
+
+2. **Deploy on Vercel**:
+   - Import your repository in [vercel.com/new](https://vercel.com/new).
+   - In **Environment Variables**, add:
+     - `MODEL_API_URL`
+     - `MODEL_API_KEY`
+     - `NEXT_PUBLIC_SUPABASE_URL`
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - Click **Deploy**.
+
+3. **Update Supabase Redirect URLs**:
+   - In Supabase Dashboard -> **Authentication** -> **URL Configuration**:
+   - Add your production Vercel URL to **Redirect URLs**:
+     ```
+     https://<your-project>.vercel.app/auth/callback
+     ```
+
+---
+
+## 🛡️ Architecture & Security Highlights
+
+- **Server-Side Session Validation**: Authenticated routes (`/app`, `/onboarding`) are verified via Next.js middleware and Supabase SSR cookies. Client-side user IDs are never trusted blindly.
+- **Row Level Security (RLS)**: PostgreSQL enforces isolation at the database layer.
+- **No Model Fallbacks / Fake Answers**: If the model API is unreachable or unconfigured, `/api/chat` returns a clear error status code rather than hallucinating an answer.
+- **Dual Storage & Seamless Migration**: Existing local conversations from earlier sessions are safely migrated into the user's Supabase account upon first sign-in without data loss.

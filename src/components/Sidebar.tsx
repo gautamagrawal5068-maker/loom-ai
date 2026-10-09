@@ -1,8 +1,23 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Plus, Search, MessageSquare, Pencil, Trash2, X, Check, Sparkles } from 'lucide-react';
-import { Conversation } from '@/types';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  Plus,
+  Search,
+  MessageSquare,
+  Pencil,
+  Trash2,
+  X,
+  Check,
+  Sparkles,
+  LogOut,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { Conversation, UserProfile } from '@/types';
+import { Logo } from '@/components/Logo';
+import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -15,6 +30,7 @@ interface SidebarProps {
   onClose: () => void;
   hasStyleSample?: boolean;
   onOpenStyleModal?: () => void;
+  profile?: UserProfile | null;
 }
 
 export function Sidebar({
@@ -28,7 +44,9 @@ export function Sidebar({
   onClose,
   hasStyleSample = false,
   onOpenStyleModal,
+  profile,
 }: SidebarProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -71,43 +89,49 @@ export function Sidebar({
     setDeletingId(null);
   };
 
+  const handleSignOut = async () => {
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    }
+    router.replace('/');
+  };
+
   return (
     <>
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-2xs md:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-xs md:hidden animate-in fade-in duration-200"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 flex h-full w-72 flex-col border-r border-stone-200 bg-stone-50 transition-transform duration-300 ease-in-out md:translate-x-0 shrink-0 ${
+        className={`fixed md:static inset-y-0 left-0 z-50 flex h-full w-72 flex-col border-r border-zinc-800 bg-[#0c0c10] transition-transform duration-300 ease-in-out md:translate-x-0 shrink-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header & New Chat */}
-        <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-stone-200/60 bg-white md:bg-stone-50">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-bold tracking-tight text-stone-900">
-              LOOM <span className="text-emerald-600">AI</span>
-            </span>
-          </div>
+        {/* Header with Pixel Logo and New Chat */}
+        <div className="flex h-14 shrink-0 items-center justify-between px-3.5 border-b border-zinc-800/80 bg-[#0c0c10]">
+          <Link href="/" className="hover:opacity-90 transition-opacity">
+            <Logo size="sm" />
+          </Link>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={onNewChat}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-200/70 hover:text-stone-900 transition-colors cursor-pointer border border-stone-200/80 md:border-stone-200"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-mono font-medium text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 hover:border-purple-500/50 transition-all cursor-pointer shadow-xs"
               aria-label="New Chat"
-              title="Start a new email conversation"
+              title="Start a new email draft"
             >
-              <Plus className="h-3.5 w-3.5 text-emerald-600" />
+              <Plus className="h-3.5 w-3.5 text-purple-400" />
               <span>New</span>
             </button>
             <button
               onClick={onClose}
-              className="md:hidden flex items-center justify-center rounded-lg p-1.5 text-stone-500 hover:bg-stone-200 transition-colors cursor-pointer"
+              className="md:hidden flex items-center justify-center rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 transition-colors cursor-pointer"
               aria-label="Close sidebar"
             >
               <X className="h-4 w-4" />
@@ -118,13 +142,13 @@ export function Sidebar({
         {/* Search */}
         <div className="px-3 py-2.5">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
               placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-xs text-stone-800 placeholder:text-stone-400 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 py-1.5 pl-8 pr-3 text-xs text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
             />
           </div>
         </div>
@@ -132,16 +156,16 @@ export function Sidebar({
         {/* Conversation List */}
         <div className="flex-1 overflow-y-auto px-2 py-1 scrollbar-none">
           {filteredConversations.length === 0 ? (
-            <div className="px-3 py-8 text-center">
-              <p className="text-xs text-stone-400">
-                {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+            <div className="px-3 py-10 text-center">
+              <p className="text-xs text-zinc-500">
+                {searchQuery ? 'No matching conversations' : 'No email drafts yet'}
               </p>
               {!searchQuery && (
                 <button
                   onClick={onNewChat}
-                  className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium inline-block cursor-pointer"
+                  className="mt-2 text-xs text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400 hover:underline font-mono inline-block cursor-pointer"
                 >
-                  Start your first email
+                  Draft your first email
                 </button>
               )}
             </div>
@@ -158,14 +182,14 @@ export function Sidebar({
                     onClick={() => !isRenaming && !isDeleting && onSelectConversation(chat.id)}
                     className={`group relative flex cursor-pointer items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors ${
                       isActive
-                        ? 'bg-emerald-50 text-emerald-900 border-l-2 border-emerald-600 rounded-l-xs font-medium'
-                        : 'text-stone-600 hover:bg-stone-200/50 hover:text-stone-900'
+                        ? 'bg-zinc-900 text-white border-l-2 border-purple-500 rounded-l-xs font-medium shadow-xs'
+                        : 'text-zinc-400 hover:bg-zinc-900/50 hover:text-zinc-200'
                     }`}
                   >
                     <div className="flex flex-1 items-center gap-2 overflow-hidden mr-1">
                       <MessageSquare
                         className={`h-3.5 w-3.5 shrink-0 ${
-                          isActive ? 'text-emerald-600' : 'text-stone-400'
+                          isActive ? 'text-purple-400' : 'text-zinc-500'
                         }`}
                       />
 
@@ -178,7 +202,7 @@ export function Sidebar({
                             onChange={(e) => setRenameText(e.target.value)}
                             onKeyDown={handleRenameKeyDown}
                             onBlur={() => handleRenameSubmit()}
-                            className="w-full bg-white px-1.5 py-0.5 text-xs outline-none border border-emerald-600 rounded text-stone-900"
+                            className="w-full bg-zinc-950 px-1.5 py-0.5 text-xs outline-none border border-purple-500 rounded text-white"
                           />
                         </div>
                       ) : (
@@ -201,14 +225,14 @@ export function Sidebar({
                           >
                             <button
                               onClick={(e) => handleDeleteConfirm(e, chat.id)}
-                              className="p-1 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                              className="p-1 text-red-400 hover:bg-red-950/40 rounded transition-colors"
                               title="Confirm Delete"
                             >
                               <Check className="h-3 w-3" />
                             </button>
                             <button
                               onClick={() => setDeletingId(null)}
-                              className="p-1 text-stone-400 hover:bg-stone-200 rounded-md transition-colors"
+                              className="p-1 text-zinc-400 hover:bg-zinc-800 rounded transition-colors"
                               title="Cancel"
                             >
                               <X className="h-3 w-3" />
@@ -222,7 +246,7 @@ export function Sidebar({
                                 setRenamingId(chat.id);
                                 setRenameText(chat.title);
                               }}
-                              className="p-1 text-stone-400 hover:text-stone-800 rounded hover:bg-stone-200/60 transition-colors"
+                              className="p-1 text-zinc-500 hover:text-zinc-200 rounded hover:bg-zinc-800 transition-colors"
                               aria-label="Rename"
                               title="Rename conversation"
                             >
@@ -233,7 +257,7 @@ export function Sidebar({
                                 e.stopPropagation();
                                 setDeletingId(chat.id);
                               }}
-                              className="p-1 text-stone-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                              className="p-1 text-zinc-500 hover:text-red-400 rounded hover:bg-red-950/30 transition-colors"
                               aria-label="Delete"
                               title="Delete conversation"
                             >
@@ -250,23 +274,67 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Sidebar Footer */}
+        {/* Writing Style Action */}
         {onOpenStyleModal && (
-          <div className="p-2.5 border-t border-stone-200/60 bg-stone-50/80">
+          <div className="px-2.5 py-2 border-t border-zinc-800/80 bg-[#0c0c10]">
             <button
               onClick={onOpenStyleModal}
-              className="w-full flex items-center justify-between p-2 rounded-xl bg-white border border-stone-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-stone-700 transition-all cursor-pointer shadow-2xs"
+              className="w-full flex items-center justify-between p-2 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-purple-500/40 hover:bg-zinc-900 text-zinc-300 transition-all cursor-pointer shadow-2xs"
             >
               <div className="flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                <Sparkles className="h-3.5 w-3.5 text-purple-400" />
                 <span className="text-xs font-medium">Writing Style Sample</span>
               </div>
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600">
-                {hasStyleSample ? 'Active' : 'Add'}
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                  hasStyleSample
+                    ? 'bg-purple-950/60 text-purple-300 border border-purple-800/50'
+                    : 'bg-zinc-800 text-zinc-400'
+                }`}
+              >
+                {hasStyleSample ? 'Active' : 'Set'}
               </span>
             </button>
           </div>
         )}
+
+        {/* User Profile & Sign Out Bar */}
+        <div className="p-3 border-t border-zinc-800 bg-[#0a0a0d] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center font-mono font-bold text-xs text-white shrink-0 shadow-2xs">
+              {profile?.preferred_name
+                ? profile.preferred_name.charAt(0).toUpperCase()
+                : 'U'}
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-zinc-200 truncate">
+                {profile?.preferred_name || 'My Account'}
+              </div>
+              <div className="text-[10px] text-zinc-500 truncate">
+                {profile?.user_category || 'Workspace'}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Preferences button to re-run onboarding */}
+            <Link
+              href="/onboarding?edit=true"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+              title="Edit Profile & Onboarding Preferences"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+            </Link>
+
+            <button
+              onClick={handleSignOut}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-950/30 transition-colors cursor-pointer"
+              title="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </aside>
     </>
   );
