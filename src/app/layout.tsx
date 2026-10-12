@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#09090b] text-zinc-100 min-h-dvh flex flex-col">{children}</body>
+      <body className="bg-[#191817] text-[#ecebe6] min-h-dvh flex flex-col">{children}</body>
     </html>
   );
 }

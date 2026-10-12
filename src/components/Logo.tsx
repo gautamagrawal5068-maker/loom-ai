@@ -1,68 +1,37 @@
 'use client';
 
-import { useState } from 'react';
 import Image from 'next/image';
 
 interface LogoProps {
-  size?: 'sm' | 'md' | 'lg';
-  showWordmark?: boolean;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero';
   className?: string;
+  withGlow?: boolean;
 }
 
-export function Logo({ size = 'md', showWordmark = true, className = '' }: LogoProps) {
-  const [imgError, setImgError] = useState(false);
+const SIZE_MAP = {
+  sm: { px: 28, class: 'w-7 h-7 rounded-lg' },
+  md: { px: 36, class: 'w-9 h-9 rounded-xl' },
+  lg: { px: 56, class: 'w-14 h-14 rounded-2xl' },
+  xl: { px: 80, class: 'w-20 h-20 rounded-2xl' },
+  hero: { px: 128, class: 'w-24 h-24 sm:w-32 sm:h-32 rounded-3xl' },
+};
 
-  // Dimensions
-  const dimensions = {
-    sm: { img: 24, font: 'text-sm', badge: 'text-[9px]' },
-    md: { img: 32, font: 'text-base', badge: 'text-[10px]' },
-    lg: { img: 48, font: 'text-2xl', badge: 'text-xs' },
-  }[size];
+export function Logo({ size = 'md', className = '', withGlow = false }: LogoProps) {
+  const config = SIZE_MAP[size];
 
   return (
-    <div className={`flex items-center gap-2.5 select-none ${className}`}>
-      {/* Logo Orb / Image */}
-      <div className="relative flex items-center justify-center shrink-0">
-        {!imgError ? (
-          <div className="relative overflow-hidden rounded-lg">
-            <Image
-              src="/loom-logo.png"
-              alt="LOOM AI Logo"
-              width={dimensions.img}
-              height={dimensions.img}
-              className="object-contain"
-              onError={() => setImgError(true)}
-              priority
-            />
-          </div>
-        ) : (
-          /* Pixel-styled Glowing Orb Fallback if asset is missing before user copies it */
-          <div
-            className="relative flex items-center justify-center rounded-lg border border-fuchsia-500/40 bg-zinc-950 shadow-[0_0_15px_rgba(217,70,239,0.35)]"
-            style={{ width: dimensions.img, height: dimensions.img }}
-          >
-            {/* Glowing Orb Gradient */}
-            <div className="absolute inset-1 rounded-full bg-gradient-to-tr from-pink-500 via-purple-600 to-cyan-400 blur-[2px] opacity-80" />
-            <div className="relative font-mono font-black text-white text-[11px] tracking-tighter">
-              L
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Typography with Pixel Styling */}
-      {showWordmark && (
-        <div className="flex items-baseline gap-1.5 font-mono">
-          <span className={`font-bold tracking-tight text-white ${dimensions.font}`}>
-            LOOM<span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400">.AI</span>
-          </span>
-          <span
-            className={`hidden sm:inline-block rounded px-1 py-0.2 font-mono font-semibold uppercase tracking-wider text-cyan-400/90 bg-cyan-950/40 border border-cyan-800/50 ${dimensions.badge}`}
-          >
-            v1.0
-          </span>
-        </div>
+    <div className={`relative inline-flex items-center justify-center shrink-0 select-none ${className}`}>
+      {withGlow && (
+        <div className="absolute inset-0 bg-gradient-to-tr from-pink-500/30 via-purple-600/30 to-cyan-400/30 rounded-full blur-2xl transform scale-125 pointer-events-none" />
       )}
+      <Image
+        src="/loom-logo.png"
+        alt="LOOM.AI"
+        width={config.px}
+        height={config.px}
+        priority={size === 'hero' || size === 'xl' || size === 'lg'}
+        className={`relative object-contain border border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.5)] transition-transform duration-200 hover:scale-[1.02] ${config.class}`}
+      />
     </div>
   );
 }

@@ -25,11 +25,10 @@ function AuthContent() {
   const supabaseConfigured = isSupabaseConfigured();
 
   useEffect(() => {
-    // If user is already authenticated, redirect
     if (supabaseConfigured) {
       const supabase = createClient();
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
+      supabase.auth.getUser().then((res) => {
+        if (res.data?.user) {
           router.replace(redirectTo);
         }
       });
@@ -54,12 +53,23 @@ function AuthContent() {
         provider: 'google',
         options: {
           redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 
       if (error) throw error;
     } catch (err: unknown) {
-      const errMessage = err instanceof Error ? err.message : 'Google authentication failed';
+      let errMessage = err instanceof Error ? err.message : 'Google authentication failed';
+      if (
+        errMessage.toLowerCase().includes('provider is not enabled') ||
+        errMessage.toLowerCase().includes('unsupported provider')
+      ) {
+        errMessage =
+          'Google Sign-In is not enabled yet in your Supabase project. You can sign in or create an account with Email & Password below, or enable Google under Supabase Dashboard → Authentication → Providers → Google.';
+      }
       setErrorMessage(errMessage);
       setIsGoogleLoading(false);
     }
@@ -122,25 +132,39 @@ function AuthContent() {
 
         if (error) throw error;
 
-        // Check if onboarding completed
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
         if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('onboarding_completed')
-            .eq('id', user.id)
-            .single();
+          // Check user_metadata, cookie, localStorage, and profiles table
+          const isCompletedMeta = user.user_metadata?.onboarding_completed === true;
+          const isCompletedCookie =
+            typeof document !== 'undefined' &&
+            document.cookie.includes('loom_onboarding_completed=true');
+          const isCompletedLocal =
+            typeof localStorage !== 'undefined' &&
+            localStorage.getItem('loom_onboarding_completed') === 'true';
 
-          if (profile?.onboarding_completed) {
-            router.replace(redirectTo);
+          let isCompletedDb = false;
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('onboarding_completed')
+              .eq('id', user.id)
+              .single();
+            isCompletedDb = !!profile?.onboarding_completed;
+          } catch {
+            // Profile table may not exist yet
+          }
+
+          if (isCompletedMeta || isCompletedCookie || isCompletedLocal || isCompletedDb) {
+            router.replace(redirectTo || '/app');
           } else {
             router.replace('/onboarding');
           }
         } else {
-          router.replace(redirectTo);
+          router.replace(redirectTo || '/app');
         }
       }
     } catch (err: unknown) {
@@ -152,52 +176,78 @@ function AuthContent() {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col justify-center items-center px-4 py-12 bg-[#09090b] relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-tr from-pink-600/10 via-purple-600/15 to-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="min-h-dvh flex flex-col justify-center items-center px-4 py-12 bg-[#191817] text-[#ecebe6] relative overflow-hidden font-sans">
       <div className="w-full max-w-md relative z-10">
-        {/* Logo and header */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex justify-center mb-4">
-            <Logo size="lg" />
+        {/* Brand Header */}
+        <div className="text-center mb-8 flex flex-col items-center">
+          <Link href="/" className="mb-4 hover:scale-105 transition-transform">
+            <Logo size="xl" withGlow={true} />
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-white font-mono">
-            {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            {mode === 'signin' ? 'Welcome back to LOOM' : 'Create your LOOM account'}
           </h1>
-          <p className="text-sm text-zinc-400 mt-1.5">
+          <p className="text-xs text-zinc-400 mt-1.5 max-w-xs">
             Your emails, written the way you would write them.
           </p>
         </div>
 
-        {/* Configuration Notice if Supabase keys missing */}
+        {/* Configuration Notice */}
         {!supabaseConfigured && (
-          <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs leading-relaxed flex items-start gap-2.5">
+          <div className="mb-6 p-4 rounded-2xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs leading-relaxed flex items-start gap-2.5">
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
             <div>
               <span className="font-semibold block mb-0.5">Supabase Configuration Required</span>
-              To enable authentication and data persistence, add your Supabase credentials to{' '}
-              <code className="bg-amber-900/40 px-1 py-0.5 rounded text-amber-200 font-mono">.env.local</code>:
-              <div className="mt-1.5 font-mono text-[11px] text-amber-200/90 space-y-0.5">
-                <div>NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co</div>
-                <div>NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key</div>
-              </div>
+              Add your credentials to <code className="bg-amber-900/40 px-1 py-0.5 rounded text-amber-200 font-mono">.env.local</code> to activate live authentication.
             </div>
           </div>
         )}
 
         {/* Auth Card */}
-        <div className="rounded-2xl border border-zinc-800 bg-[#121217]/90 p-6 sm:p-8 shadow-2xl backdrop-blur-sm">
-          {/* Error & Success Messages */}
+        <div className="rounded-2xl border border-[#343230] bg-[#23211f] p-6 sm:p-8 shadow-xl">
+          {/* Mode Switcher Tabs */}
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-[#1a1917] border border-[#2f2d2a] mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                mode === 'signin'
+                  ? 'bg-[#2f2d2a] text-[#edebe6] shadow-xs'
+                  : 'text-[#9e9a93] hover:text-[#edebe6]'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signup');
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                mode === 'signup'
+                  ? 'bg-[#2f2d2a] text-[#edebe6] shadow-xs'
+                  : 'text-[#9e9a93] hover:text-[#edebe6]'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          {/* Messages */}
           {errorMessage && (
-            <div className="mb-5 p-3 rounded-xl border border-red-500/30 bg-red-950/30 text-red-300 text-xs flex items-start gap-2">
+            <div className="mb-5 p-3.5 rounded-xl border border-red-500/30 bg-red-950/20 text-red-300 text-xs flex items-start gap-2.5 leading-relaxed">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-5 p-3 rounded-xl border border-emerald-500/30 bg-emerald-950/30 text-emerald-300 text-xs flex items-start gap-2">
+            <div className="mb-5 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-300 text-xs flex items-start gap-2.5 leading-relaxed">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <span>{successMessage}</span>
             </div>
@@ -208,10 +258,10 @@ function AuthContent() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isGoogleLoading || isLoading}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium transition-all shadow-xs hover:border-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-[#383633] bg-[#1a1917] hover:bg-[#282624] text-[#edebe6] text-xs font-medium transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isGoogleLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+              <Loader2 className="w-4 h-4 animate-spin text-[#cc785c]" />
             ) : (
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
@@ -237,58 +287,58 @@ function AuthContent() {
 
           {/* Divider */}
           <div className="flex items-center my-5">
-            <div className="flex-1 border-t border-zinc-800" />
-            <span className="px-3 text-xs text-zinc-500 uppercase font-mono tracking-wider">or</span>
-            <div className="flex-1 border-t border-zinc-800" />
+            <div className="flex-1 border-t border-[#343230]" />
+            <span className="px-3 text-[11px] text-[#9e9a93] font-mono">or email</span>
+            <div className="flex-1 border-t border-[#343230]" />
           </div>
 
-          {/* Email / Password Form */}
+          {/* Form */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {mode === 'signup' && (
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                <label className="block text-xs font-medium text-[#c4c0b6] mb-1.5">
                   Full Name
                 </label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Alex Rivera"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/60 text-white text-sm placeholder:text-zinc-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                  placeholder="Gautam Agrawal"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-xs placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label className="block text-xs font-medium text-[#c4c0b6] mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-[#7e7a73] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="alex@company.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/60 text-white text-sm placeholder:text-zinc-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                  placeholder="gautam@company.com"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-xs placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label className="block text-xs font-medium text-[#c4c0b6] mb-1.5">
                 Password
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-[#7e7a73] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/60 text-white text-sm placeholder:text-zinc-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-xs placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all"
                 />
               </div>
             </div>
@@ -296,62 +346,27 @@ function AuthContent() {
             <button
               type="submit"
               disabled={isLoading || isGoogleLoading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-pink-500 via-purple-600 to-cyan-500 hover:opacity-95 text-white text-sm font-semibold transition-all shadow-[0_0_20px_rgba(217,70,239,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#cc785c] hover:bg-[#b8684e] text-white text-xs font-semibold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
               ) : (
                 <>
-                  <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>{mode === 'signin' ? 'Sign In to Workspace' : 'Create Free Account'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </button>
           </form>
-
-          {/* Toggle Sign In / Sign Up */}
-          <div className="mt-6 pt-5 border-t border-zinc-800 text-center">
-            {mode === 'signin' ? (
-              <p className="text-xs text-zinc-400">
-                Don&apos;t have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signup');
-                    setErrorMessage(null);
-                    setSuccessMessage(null);
-                  }}
-                  className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400 hover:underline cursor-pointer"
-                >
-                  Sign up
-                </button>
-              </p>
-            ) : (
-              <p className="text-xs text-zinc-400">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signin');
-                    setErrorMessage(null);
-                    setSuccessMessage(null);
-                  }}
-                  className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400 hover:underline cursor-pointer"
-                >
-                  Sign in
-                </button>
-              </p>
-            )}
-          </div>
         </div>
 
-        {/* Back to landing page */}
+        {/* Back Link */}
         <div className="text-center mt-6">
           <Link
             href="/"
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors inline-flex items-center gap-1"
+            className="text-xs text-[#9e9a93] hover:text-[#edebe6] transition-colors inline-flex items-center gap-1 font-mono"
           >
-            ← Back to LOOM AI homepage
+            ← Back to LOOM AI
           </Link>
         </div>
       </div>
@@ -363,8 +378,8 @@ export default function AuthPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-dvh flex items-center justify-center bg-[#09090b]">
-          <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+        <div className="min-h-dvh flex items-center justify-center bg-[#191817]">
+          <Loader2 className="w-6 h-6 animate-spin text-[#cc785c]" />
         </div>
       }
     >

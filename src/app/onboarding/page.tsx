@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { UserCategory, EmailPurpose, PreferredStyle } from '@/types';
@@ -15,6 +16,7 @@ import {
   Target,
   PenTool,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
 
 const CATEGORIES: { label: UserCategory; desc: string }[] = [
@@ -58,7 +60,7 @@ export default function OnboardingPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Resume state from Supabase or localStorage
+  // Resume state from Supabase user_metadata, profiles table, or localStorage
   useEffect(() => {
     async function loadInitialProfile() {
       if (!isSupabaseConfigured()) {
@@ -68,76 +70,167 @@ export default function OnboardingPage() {
         const localPurp = (localStorage.getItem('loom_onboard_purp') as EmailPurpose) || null;
         const localStyle = (localStorage.getItem('loom_onboard_style') as PreferredStyle) || null;
         const localSample = localStorage.getItem('loom-ai-style-sample') || '';
+        const localCompleted = localStorage.getItem('loom_onboarding_completed') === 'true';
 
         if (localName) setPreferredName(localName);
         if (localCat) setUserCategory(localCat);
         if (localPurp) setEmailPurpose(localPurp);
         if (localStyle) setPreferredStyle(localStyle);
         if (localSample) setStyleSample(localSample);
+
+        const autoSkip = new URLSearchParams(window.location.search).get('edit') !== 'true';
+        if (localCompleted && autoSkip) {
+          router.replace('/app');
+          return;
+        }
+
         setIsLoading(false);
         return;
       }
 
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (!user) {
-        router.replace('/auth');
-        return;
-      }
+        if (!user) {
+          router.replace('/auth');
+          return;
+        }
 
-      setUserId(user.id);
+        setUserId(user.id);
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
-        if (profile.preferred_name) setPreferredName(profile.preferred_name);
-        if (profile.user_category) setUserCategory(profile.user_category);
-        if (profile.email_purpose) setEmailPurpose(profile.email_purpose);
-        if (profile.preferred_style) setPreferredStyle(profile.preferred_style);
-        if (profile.style_sample) setStyleSample(profile.style_sample);
-
-        // If user has already completed onboarding, allow visiting or fast-track
         const autoSkip = new URLSearchParams(window.location.search).get('edit') !== 'true';
-        if (profile.onboarding_completed && autoSkip) {
+
+        // Check if user already finished onboarding via user metadata, cookie, or localStorage
+        const isCompletedMeta = user.user_metadata?.onboarding_completed === true;
+        const isCompletedCookie =
+          typeof document !== 'undefined' &&
+          document.cookie.includes('loom_onboarding_completed=true');
+        const isCompletedLocal =
+          typeof localStorage !== 'undefined' &&
+          localStorage.getItem('loom_onboarding_completed') === 'true';
+
+        // Preload any saved preferences from user_metadata or localStorage
+        const metaName =
+          user.user_metadata?.preferred_name ||
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          localStorage.getItem('loom_onboard_name') ||
+          '';
+        if (metaName) setPreferredName(metaName);
+
+        const metaCat =
+          user.user_metadata?.user_category ||
+          (localStorage.getItem('loom_onboard_cat') as UserCategory) ||
+          null;
+        if (metaCat) setUserCategory(metaCat);
+
+        const metaPurp =
+          user.user_metadata?.email_purpose ||
+          (localStorage.getItem('loom_onboard_purp') as EmailPurpose) ||
+          null;
+        if (metaPurp) setEmailPurpose(metaPurp);
+
+        const metaStyle =
+          user.user_metadata?.preferred_style ||
+          (localStorage.getItem('loom_onboard_style') as PreferredStyle) ||
+          null;
+        if (metaStyle) setPreferredStyle(metaStyle);
+
+        const metaSample =
+          user.user_metadata?.style_sample ||
+          localStorage.getItem('loom-ai-style-sample') ||
+          '';
+        if (metaSample) setStyleSample(metaSample);
+
+        // Fast-track skip to /app if already completed and not in edit mode
+        if ((isCompletedMeta || isCompletedCookie || isCompletedLocal) && autoSkip) {
           router.replace('/app');
           return;
         }
-      } else {
-        // Default preferred name from OAuth user metadata
-        const metaName = user.user_metadata?.full_name || user.user_metadata?.name || '';
-        if (metaName) setPreferredName(metaName);
-      }
 
-      setIsLoading(false);
+        // Also query profiles table if it exists
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (profile) {
+            if (profile.preferred_name) setPreferredName(profile.preferred_name);
+            if (profile.user_category) setUserCategory(profile.user_category);
+            if (profile.email_purpose) setEmailPurpose(profile.email_purpose);
+            if (profile.preferred_style) setPreferredStyle(profile.preferred_style);
+            if (profile.style_sample) setStyleSample(profile.style_sample);
+
+            if (profile.onboarding_completed && autoSkip) {
+              document.cookie =
+                'loom_onboarding_completed=true; path=/; max-age=31536000; SameSite=Lax';
+              localStorage.setItem('loom_onboarding_completed', 'true');
+              router.replace('/app');
+              return;
+            }
+          }
+        } catch {
+          // profiles table does not exist or has RLS error; handled gracefully
+        }
+      } catch (err) {
+        console.error('Onboarding session fetch error:', err);
+      } finally {
+        setIsLoading(false);
+      }
     }
 
     loadInitialProfile();
   }, [router]);
 
-  // Intermediate auto-save helper
+  // Unified save helper (persists to localStorage, Supabase user_metadata, and profiles table)
   const saveProgress = async (partialData: Record<string, unknown>) => {
-    if (isSupabaseConfigured() && userId) {
-      const supabase = createClient();
-      await supabase.from('profiles').upsert({
-        id: userId,
-        ...partialData,
-        updated_at: new Date().toISOString(),
-      });
+    // 1. LocalStorage backup
+    if (partialData.preferred_name)
+      localStorage.setItem('loom_onboard_name', String(partialData.preferred_name));
+    if (partialData.user_category)
+      localStorage.setItem('loom_onboard_cat', String(partialData.user_category));
+    if (partialData.email_purpose)
+      localStorage.setItem('loom_onboard_purp', String(partialData.email_purpose));
+    if (partialData.preferred_style)
+      localStorage.setItem('loom_onboard_style', String(partialData.preferred_style));
+    if (partialData.style_sample)
+      localStorage.setItem('loom-ai-style-sample', String(partialData.style_sample));
+
+    if (partialData.onboarding_completed) {
+      localStorage.setItem('loom_onboarding_completed', 'true');
+      document.cookie =
+        'loom_onboarding_completed=true; path=/; max-age=31536000; SameSite=Lax';
     }
 
-    // Local storage backup
-    if (partialData.preferred_name) localStorage.setItem('loom_onboard_name', String(partialData.preferred_name));
-    if (partialData.user_category) localStorage.setItem('loom_onboard_cat', String(partialData.user_category));
-    if (partialData.email_purpose) localStorage.setItem('loom_onboard_purp', String(partialData.email_purpose));
-    if (partialData.preferred_style) localStorage.setItem('loom_onboard_style', String(partialData.preferred_style));
-    if (partialData.style_sample) localStorage.setItem('loom-ai-style-sample', String(partialData.style_sample));
+    // 2. Persist to Supabase Auth user_metadata (100% reliable, zero schema requirements)
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      try {
+        await supabase.auth.updateUser({
+          data: partialData,
+        });
+      } catch (metaErr) {
+        console.warn('Supabase user metadata update warning:', metaErr);
+      }
+
+      // 3. Try to upsert to profiles table if it exists
+      if (userId) {
+        try {
+          await supabase.from('profiles').upsert({
+            id: userId,
+            ...partialData,
+            updated_at: new Date().toISOString(),
+          });
+        } catch {
+          // Table may not exist yet in user's Supabase project
+        }
+      }
+    }
   };
 
   const handleNext = async () => {
@@ -180,15 +273,19 @@ export default function OnboardingPage() {
   const handleFinish = async () => {
     setIsSaving(true);
     const finalData = {
-      preferred_name: preferredName.trim(),
-      user_category: userCategory,
-      email_purpose: emailPurpose,
-      preferred_style: preferredStyle,
+      preferred_name: preferredName.trim() || 'User',
+      user_category: userCategory || 'Professional',
+      email_purpose: emailPurpose || 'Work',
+      preferred_style: preferredStyle || 'Professional',
       style_sample: styleSample.trim(),
       onboarding_completed: true,
     };
 
     await saveProgress(finalData);
+
+    localStorage.setItem('loom_onboarding_completed', 'true');
+    document.cookie =
+      'loom_onboarding_completed=true; path=/; max-age=31536000; SameSite=Lax';
 
     if (styleSample.trim()) {
       localStorage.setItem('loom-ai-style-sample', styleSample.trim());
@@ -198,12 +295,27 @@ export default function OnboardingPage() {
     router.replace('/app');
   };
 
+  const handleSkipToWorkspace = async () => {
+    setIsSaving(true);
+    await saveProgress({
+      onboarding_completed: true,
+      preferred_name: preferredName.trim() || 'User',
+      preferred_style: preferredStyle || 'Professional',
+      email_purpose: emailPurpose || 'Work',
+    });
+    localStorage.setItem('loom_onboarding_completed', 'true');
+    document.cookie =
+      'loom_onboarding_completed=true; path=/; max-age=31536000; SameSite=Lax';
+    setIsSaving(false);
+    router.replace('/app');
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-[#09090b]">
+      <div className="min-h-dvh flex items-center justify-center bg-[#191817]">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-          <p className="text-xs text-zinc-400 font-mono">Loading onboarding...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-[#cc785c]" />
+          <p className="text-xs text-[#9e9a93] font-mono">Loading onboarding...</p>
         </div>
       </div>
     );
@@ -212,25 +324,35 @@ export default function OnboardingPage() {
   const progressPercentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
 
   return (
-    <div className="min-h-dvh flex flex-col justify-between bg-[#09090b] text-zinc-100 p-4 sm:p-8 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gradient-to-tr from-pink-600/10 via-purple-600/15 to-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="min-h-dvh flex flex-col justify-between bg-[#191817] text-[#ecebe6] p-4 sm:p-8 relative overflow-hidden font-sans">
       {/* Top Header */}
-      <header className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6 relative z-10">
-        <Logo size="md" />
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-zinc-400">
+      <header className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6 relative z-10 border-b border-[#2e2c29]">
+        <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
+          <Logo size="sm" />
+          <span className="font-mono text-sm font-semibold text-[#edebe6] tracking-tight">
+            LOOM.AI
+          </span>
+        </Link>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleSkipToWorkspace}
+            className="text-xs text-[#9e9a93] hover:text-[#edebe6] transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Skip to Workspace</span>
+            <ExternalLink className="w-3 h-3" />
+          </button>
+          <span className="text-xs font-mono text-[#9e9a93] bg-[#23211f] border border-[#343230] px-2 py-0.5 rounded-md">
             Step {currentStep} of {totalSteps}
           </span>
         </div>
       </header>
 
       {/* Progress Bar */}
-      <div className="w-full max-w-2xl mx-auto mb-6 relative z-10">
-        <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+      <div className="w-full max-w-2xl mx-auto my-5 relative z-10">
+        <div className="h-1.5 w-full bg-[#23211f] rounded-full overflow-hidden border border-[#343230]">
           <div
-            className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 transition-all duration-300 ease-out"
+            className="h-full bg-[#cc785c] transition-all duration-300 ease-out"
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
@@ -238,10 +360,10 @@ export default function OnboardingPage() {
 
       {/* Wizard Content Card */}
       <main className="w-full max-w-2xl mx-auto flex-1 flex flex-col justify-center relative z-10 my-4">
-        <div className="rounded-2xl border border-zinc-800 bg-[#121217]/90 p-6 sm:p-10 shadow-2xl backdrop-blur-sm transition-all">
+        <div className="rounded-2xl border border-[#343230] bg-[#23211f] p-6 sm:p-10 shadow-xl transition-all">
           {/* Validation Error banner */}
           {validationError && (
-            <div className="mb-6 p-3 rounded-xl border border-red-500/30 bg-red-950/30 text-red-300 text-xs flex items-center gap-2">
+            <div className="mb-6 p-3 rounded-xl border border-red-500/30 bg-red-950/20 text-red-300 text-xs flex items-center gap-2">
               <span>{validationError}</span>
             </div>
           )}
@@ -249,19 +371,21 @@ export default function OnboardingPage() {
           {/* STEP 1: PREFERRED NAME */}
           {currentStep === 1 && (
             <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-purple-400 mb-2">
+              <div className="flex items-center gap-2 text-[#cc785c] mb-2">
                 <User className="w-4 h-4" />
                 <span className="text-xs font-mono uppercase tracking-wider">Step 1</span>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
+              <h2 className="text-2xl font-bold text-[#edebe6] mb-2 font-mono">
                 What should LOOM call you?
               </h2>
-              <p className="text-sm text-zinc-400 mb-6">
+              <p className="text-sm text-[#9e9a93] mb-6">
                 Your preferred name will be used to personalize greetings and email sign-offs.
               </p>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-2">Preferred Name</label>
+                <label className="block text-xs font-medium text-[#c4c0b6] mb-2">
+                  Preferred Name
+                </label>
                 <input
                   type="text"
                   autoFocus
@@ -269,7 +393,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setPreferredName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleNext()}
                   placeholder="e.g. Gautam or Alex"
-                  className="w-full px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/60 text-white text-sm placeholder:text-zinc-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-sans"
+                  className="w-full px-4 py-3 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-sm placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all font-sans"
                 />
               </div>
             </div>
@@ -278,14 +402,14 @@ export default function OnboardingPage() {
           {/* STEP 2: USER CATEGORY */}
           {currentStep === 2 && (
             <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-purple-400 mb-2">
+              <div className="flex items-center gap-2 text-[#cc785c] mb-2">
                 <Briefcase className="w-4 h-4" />
                 <span className="text-xs font-mono uppercase tracking-wider">Step 2</span>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
+              <h2 className="text-2xl font-bold text-[#edebe6] mb-2 font-mono">
                 Which category describes you best?
               </h2>
-              <p className="text-sm text-zinc-400 mb-6">
+              <p className="text-sm text-[#9e9a93] mb-6">
                 Helps LOOM AI tailor vocabulary, formality, and context to your daily work.
               </p>
 
@@ -297,12 +421,12 @@ export default function OnboardingPage() {
                     onClick={() => setUserCategory(cat.label)}
                     className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
                       userCategory === cat.label
-                        ? 'border-purple-500 bg-purple-950/20 text-white shadow-[0_0_15px_rgba(168,85,247,0.2)]'
-                        : 'border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/70'
+                        ? 'border-[#cc785c] bg-[#cc785c]/15 text-[#edebe6] shadow-sm'
+                        : 'border-[#343230] bg-[#1a1917] text-[#c4c0b6] hover:border-[#484542] hover:bg-[#201e1c]'
                     }`}
                   >
                     <div className="text-sm font-semibold mb-1">{cat.label}</div>
-                    <div className="text-xs text-zinc-500 leading-relaxed">{cat.desc}</div>
+                    <div className="text-xs text-[#9e9a93] leading-relaxed">{cat.desc}</div>
                   </button>
                 ))}
               </div>
@@ -312,14 +436,14 @@ export default function OnboardingPage() {
           {/* STEP 3: MAIN EMAIL PURPOSE */}
           {currentStep === 3 && (
             <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-purple-400 mb-2">
+              <div className="flex items-center gap-2 text-[#cc785c] mb-2">
                 <Target className="w-4 h-4" />
                 <span className="text-xs font-mono uppercase tracking-wider">Step 3</span>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
+              <h2 className="text-2xl font-bold text-[#edebe6] mb-2 font-mono">
                 What is your main email writing goal?
               </h2>
-              <p className="text-sm text-zinc-400 mb-6">
+              <p className="text-sm text-[#9e9a93] mb-6">
                 Tell us where most of your drafted emails will be sent.
               </p>
 
@@ -331,12 +455,12 @@ export default function OnboardingPage() {
                     onClick={() => setEmailPurpose(purp.label)}
                     className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
                       emailPurpose === purp.label
-                        ? 'border-cyan-500 bg-cyan-950/20 text-white shadow-[0_0_15px_rgba(6,182,212,0.2)]'
-                        : 'border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/70'
+                        ? 'border-[#cc785c] bg-[#cc785c]/15 text-[#edebe6] shadow-sm'
+                        : 'border-[#343230] bg-[#1a1917] text-[#c4c0b6] hover:border-[#484542] hover:bg-[#201e1c]'
                     }`}
                   >
                     <div className="text-sm font-semibold mb-1">{purp.label}</div>
-                    <div className="text-xs text-zinc-500 leading-relaxed">{purp.desc}</div>
+                    <div className="text-xs text-[#9e9a93] leading-relaxed">{purp.desc}</div>
                   </button>
                 ))}
               </div>
@@ -346,14 +470,14 @@ export default function OnboardingPage() {
           {/* STEP 4: PREFERRED WRITING STYLE */}
           {currentStep === 4 && (
             <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-purple-400 mb-2">
+              <div className="flex items-center gap-2 text-[#cc785c] mb-2">
                 <Sparkles className="w-4 h-4" />
                 <span className="text-xs font-mono uppercase tracking-wider">Step 4</span>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
+              <h2 className="text-2xl font-bold text-[#edebe6] mb-2 font-mono">
                 What is your default writing style?
               </h2>
-              <p className="text-sm text-zinc-400 mb-6">
+              <p className="text-sm text-[#9e9a93] mb-6">
                 Choose the baseline tone that feels most authentic to you.
               </p>
 
@@ -365,12 +489,12 @@ export default function OnboardingPage() {
                     onClick={() => setPreferredStyle(style.label)}
                     className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
                       preferredStyle === style.label
-                        ? 'border-pink-500 bg-pink-950/20 text-white shadow-[0_0_15px_rgba(236,72,153,0.2)]'
-                        : 'border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/70'
+                        ? 'border-[#cc785c] bg-[#cc785c]/15 text-[#edebe6] shadow-sm'
+                        : 'border-[#343230] bg-[#1a1917] text-[#c4c0b6] hover:border-[#484542] hover:bg-[#201e1c]'
                     }`}
                   >
                     <div className="text-sm font-semibold mb-1">{style.label}</div>
-                    <div className="text-xs text-zinc-500 leading-relaxed">{style.desc}</div>
+                    <div className="text-xs text-[#9e9a93] leading-relaxed">{style.desc}</div>
                   </button>
                 ))}
               </div>
@@ -380,14 +504,16 @@ export default function OnboardingPage() {
           {/* STEP 5: OPTIONAL WRITING SAMPLE */}
           {currentStep === 5 && (
             <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-purple-400 mb-2">
+              <div className="flex items-center gap-2 text-[#cc785c] mb-2">
                 <PenTool className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-wider">Step 5 (Optional)</span>
+                <span className="text-xs font-mono uppercase tracking-wider">
+                  Step 5 (Optional)
+                </span>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
+              <h2 className="text-2xl font-bold text-[#edebe6] mb-2 font-mono">
                 Add a personal writing sample
               </h2>
-              <p className="text-sm text-zinc-400 mb-4">
+              <p className="text-sm text-[#9e9a93] mb-4">
                 Paste an email or paragraph you wrote previously. LOOM AI will analyze your sentence
                 cadence and phrasing habits. You can skip this and add it anytime.
               </p>
@@ -400,9 +526,9 @@ export default function OnboardingPage() {
                   placeholder={`Hi Team,\n\nHope everyone is having a solid week. Quick update on the roadmap deliverables—we closed the QA blockers this morning...\n\nBest,\n${
                     preferredName || 'Alex'
                   }`}
-                  className="w-full px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/60 text-white text-sm placeholder:text-zinc-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-sans leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-sm placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all font-sans leading-relaxed"
                 />
-                <div className="text-right text-xs text-zinc-500 mt-1">
+                <div className="text-right text-xs text-[#9e9a93] mt-1">
                   {styleSample.trim()
                     ? `${styleSample.trim().split(/\s+/).length} words provided`
                     : 'Optional — you can skip this step'}
@@ -414,40 +540,41 @@ export default function OnboardingPage() {
           {/* STEP 6: CONFIRMATION & COMPLETION */}
           {currentStep === 6 && (
             <div className="animate-in fade-in duration-200 text-center py-4">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-pink-500 via-purple-600 to-cyan-400 flex items-center justify-center shadow-[0_0_25px_rgba(168,85,247,0.4)]">
-                <CheckCircle2 className="w-7 h-7 text-white" />
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#cc785c]/20 border border-[#cc785c]/40 flex items-center justify-center">
+                <CheckCircle2 className="w-7 h-7 text-[#cc785c]" />
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
+              <h2 className="text-2xl font-bold text-[#edebe6] mb-2 font-mono">
                 You&apos;re ready to write with LOOM AI
               </h2>
-              <p className="text-sm text-zinc-400 max-w-md mx-auto mb-6">
+              <p className="text-sm text-[#9e9a93] max-w-md mx-auto mb-6">
                 We configured your workspace for{' '}
-                <span className="text-purple-300 font-semibold">{preferredName}</span> with a{' '}
-                <span className="text-cyan-300 font-semibold">{preferredStyle}</span> style tailored for{' '}
-                <span className="text-pink-300 font-semibold">{emailPurpose}</span> communication.
+                <span className="text-[#edebe6] font-semibold">{preferredName}</span> with a{' '}
+                <span className="text-[#cc785c] font-semibold">{preferredStyle}</span> style
+                tailored for{' '}
+                <span className="text-[#edebe6] font-semibold">{emailPurpose}</span> communication.
               </p>
 
-              <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 text-left max-w-md mx-auto text-xs space-y-2 mb-6">
+              <div className="bg-[#1a1917] border border-[#343230] rounded-xl p-4 text-left max-w-md mx-auto text-xs space-y-2 mb-6">
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Name:</span>
-                  <span className="font-medium text-zinc-200">{preferredName}</span>
+                  <span className="text-[#9e9a93]">Name:</span>
+                  <span className="font-medium text-[#edebe6]">{preferredName}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Category:</span>
-                  <span className="font-medium text-zinc-200">{userCategory}</span>
+                  <span className="text-[#9e9a93]">Category:</span>
+                  <span className="font-medium text-[#edebe6]">{userCategory}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Purpose:</span>
-                  <span className="font-medium text-zinc-200">{emailPurpose}</span>
+                  <span className="text-[#9e9a93]">Purpose:</span>
+                  <span className="font-medium text-[#edebe6]">{emailPurpose}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Baseline Style:</span>
-                  <span className="font-medium text-zinc-200">{preferredStyle}</span>
+                  <span className="text-[#9e9a93]">Baseline Style:</span>
+                  <span className="font-medium text-[#edebe6]">{preferredStyle}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Style Sample:</span>
-                  <span className="font-medium text-zinc-200">
+                  <span className="text-[#9e9a93]">Style Sample:</span>
+                  <span className="font-medium text-[#edebe6]">
                     {styleSample.trim() ? 'Configured' : 'Skipped (can add anytime)'}
                   </span>
                 </div>
@@ -456,12 +583,12 @@ export default function OnboardingPage() {
           )}
 
           {/* Navigation Controls */}
-          <div className="mt-8 pt-6 border-t border-zinc-800 flex items-center justify-between gap-4">
+          <div className="mt-8 pt-6 border-t border-[#343230] flex items-center justify-between gap-4">
             {currentStep > 1 && currentStep < totalSteps ? (
               <button
                 type="button"
                 onClick={() => setCurrentStep((prev) => prev - 1)}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] hover:bg-[#252321] text-[#c4c0b6] text-xs font-medium transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
@@ -475,7 +602,7 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setCurrentStep(6)}
-                  className="px-4 py-2.5 rounded-xl text-zinc-400 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-[#9e9a93] hover:text-[#edebe6] text-xs font-medium transition-colors cursor-pointer"
                 >
                   Skip for now
                 </button>
@@ -485,7 +612,7 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-600 to-cyan-500 hover:opacity-95 text-white text-xs font-semibold shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#cc785c] hover:bg-[#b8684e] text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
                 >
                   <span>Continue</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -495,10 +622,10 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleFinish}
                   disabled={isSaving}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-600 to-cyan-500 hover:opacity-95 text-white text-sm font-semibold shadow-[0_0_20px_rgba(217,70,239,0.35)] transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#cc785c] hover:bg-[#b8684e] text-white text-sm font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isSaving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
                   ) : (
                     <>
                       <span>Enter Workspace</span>
@@ -513,7 +640,7 @@ export default function OnboardingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-2xl mx-auto text-center pt-4 text-[11px] text-zinc-600 relative z-10 font-mono">
+      <footer className="w-full max-w-2xl mx-auto text-center pt-4 text-[11px] text-[#7e7a73] relative z-10 font-mono">
         LOOM AI — Personalization Engine
       </footer>
     </div>

@@ -5,6 +5,18 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
+  const errorParam = searchParams.get('error');
+  const errorDescription = searchParams.get('error_description');
+
+  if (errorParam || errorDescription) {
+    console.error('[Google OAuth Callback Error]:', { errorParam, errorDescription });
+    let message = errorDescription || errorParam || 'Authentication failed';
+    if (message.includes('Unable to exchange external code')) {
+      message =
+        'Google Client Secret Mismatch: Supabase was unable to verify the code with Google because the Client Secret is invalid. Please copy the Client Secret (starts with GOCSPX-) from Google Cloud Console and paste it into Supabase Dashboard -> Authentication -> Providers -> Google without extra spaces.';
+    }
+    return NextResponse.redirect(`${origin}/auth?error=${encodeURIComponent(message)}`);
+  }
 
   if (code) {
     const supabase = await createClient();
@@ -16,20 +28,37 @@ export async function GET(request: Request) {
       } = await supabase.auth.getUser();
 
       if (user) {
-        // Query profile to check onboarding completion
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('onboarding_completed')
-          .eq('id', user.id)
-          .single();
+        let isCompleted =
+          user.user_metadata?.onboarding_completed === true ||
+          (request.headers.get('cookie')?.includes('loom_onboarding_completed=true') ?? false);
 
-        if (profile?.onboarding_completed) {
+        if (!isCompleted) {
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('onboarding_completed')
+              .eq('id', user.id)
+              .single();
+
+            if (profile?.onboarding_completed) {
+              isCompleted = true;
+            }
+          } catch {
+            // Profile table may not exist yet
+          }
+        }
+
+        if (isCompleted) {
           const redirectPath = next || '/app';
           return NextResponse.redirect(`${origin}${redirectPath}`);
         } else {
           return NextResponse.redirect(`${origin}/onboarding`);
         }
       }
+    } else {
+      return NextResponse.redirect(
+        `${origin}/auth?error=${encodeURIComponent(error.message || 'Could not authenticate user')}`
+      );
     }
   }
 

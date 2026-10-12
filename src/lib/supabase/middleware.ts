@@ -49,14 +49,30 @@ export async function updateSession(request: NextRequest) {
   // If authenticated user visits /auth, send them to onboarding or workspace
   if (user && pathname.startsWith('/auth')) {
     const url = request.nextUrl.clone();
-    // Check if onboarding completed
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('onboarding_completed')
-      .eq('id', user.id)
-      .single();
+    
+    // Check cookie, user metadata, or profiles table
+    let isCompleted =
+      request.cookies.get('loom_onboarding_completed')?.value === 'true' ||
+      user.user_metadata?.onboarding_completed === true;
 
-    if (profile?.onboarding_completed) {
+    if (!isCompleted) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.onboarding_completed) {
+          isCompleted = true;
+        }
+      } catch {
+        // Profile table might not exist; fallback to true if user metadata exists
+        isCompleted = false;
+      }
+    }
+
+    if (isCompleted) {
       url.pathname = '/app';
     } else {
       url.pathname = '/onboarding';

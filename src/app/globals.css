@@ -5,7 +5,7 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 }
 
-/* Custom dark scrollbar */
+/* Custom warm dark scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -16,12 +16,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #2f2d2a;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #423f3b;
 }
 
 /* Subtle typing dot bounce */
@@ -31,7 +31,7 @@
     opacity: 0.4;
   }
   40% {
-    transform: translateY(-5px);
+    transform: translateY(-4px);
     opacity: 1;
   }
 }
@@ -55,7 +55,16 @@ html {
 }
 
 body {
-  @apply bg-[#09090b] text-zinc-100 antialiased font-sans selection:bg-purple-900/40 selection:text-white;
+  background-color: #191817;
+  color: #ecebe6;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: rgba(204, 120, 92, 0.35);
+  color: #ffffff;
 }
 
 /* Focus styles */

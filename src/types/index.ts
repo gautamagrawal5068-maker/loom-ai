@@ -56,13 +56,25 @@ export interface Conversation {
   tone?: EmailTone | null;
 }
 
+export type ModelTier = 'silk' | 'weave' | 'tapestry';
+
+export const MODEL_CREDIT_COSTS: Record<ModelTier, number> = {
+  silk: 1,       // Ultra-fast lightweight response
+  weave: 3,      // Balanced natural voice matching
+  tapestry: 8,   // Heavyweight reasoning & deep nuance (takes sufficient tokens)
+};
+
 export interface ChatRequest {
   messages: { role: 'user' | 'assistant'; content: string }[];
   styleSample?: string | null;
   tone?: EmailTone | null;
+  modelTier?: ModelTier;
 }
 
 export interface ChatResponse {
   content: string;
   error?: string;
+  modelUsed?: string;
+  creditsCost?: number;
+  remainingCredits?: number;
 }

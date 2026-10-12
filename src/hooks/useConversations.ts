@@ -1,17 +1,21 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Conversation, Message, ChatResponse, EmailTone, ChatRequest, UserProfile } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import { Conversation, Message, ChatResponse, EmailTone, ChatRequest, UserProfile, ModelTier, MODEL_CREDIT_COSTS, UserCategory, EmailPurpose, PreferredStyle } from '@/types';
 import {
   generateId,
   loadConversations as loadLocalConversations,
   saveConversations as saveLocalConversations,
-  loadActiveConversationId as loadLocalActiveId,
   saveActiveConversationId as saveLocalActiveId,
   loadStyleSample as loadLocalStyleSample,
   saveStyleSample as saveLocalStyleSample,
   loadActiveTone as loadLocalActiveTone,
   saveActiveTone as saveLocalActiveTone,
+  loadCredits as loadLocalCredits,
+  saveCredits as saveLocalCredits,
+  getTimeUntilRefillFormatted,
+  loadDeletedConversationIds,
+  markConversationDeleted,
 } from '@/lib/storage';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -32,192 +36,281 @@ interface SupabaseConversationRow {
   messages: SupabaseMessageRow[];
 }
 
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallback);
+      }
+    }, ms);
+
+    Promise.resolve(promise)
+      .then((val) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(val);
+        }
+      })
+      .catch(() => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(fallback);
+        }
+      });
+  });
+}
+
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [styleSample, setStyleSampleState] = useState<string>('');
   const [activeTone, setActiveToneState] = useState<EmailTone | null>(null);
+  const [modelTier, setModelTierState] = useState<ModelTier>('weave');
+  const [credits, setCreditsState] = useState<number>(() => loadLocalCredits());
+  const [refillCountdown, setRefillCountdown] = useState<string>(() => getTimeUntilRefillFormatted());
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const migratedRef = useRef(false);
-
-  // Initialize from Supabase or localStorage
+  // Initialize from Supabase or localStorage with guaranteed timeout failsafe
   useEffect(() => {
+    let isMounted = true;
+
+    // Guaranteed failsafe timer: forces workspace ready after 1200ms under ANY circumstance
+    const failsafeTimer = setTimeout(() => {
+      if (isMounted) {
+        setIsInitialized((prev) => {
+          if (!prev) {
+            console.warn('[useConversations] Failsafe: workspace forced ready after 1200ms.');
+            const fallbackConvs = loadLocalConversations();
+            const deletedIds = loadDeletedConversationIds();
+            const cleanConvs = fallbackConvs.filter((c) => !deletedIds.has(c.id));
+            setConversations(cleanConvs);
+            // Every time LOOM opens, start on a fresh new chat with personalized greeting
+            setActiveConversationId(null);
+            return true;
+          }
+          return prev;
+        });
+      }
+    }, 1200);
+
     async function initialize() {
-      const supabaseConfigured = isSupabaseConfigured();
+      try {
+        const supabaseConfigured = isSupabaseConfigured();
 
-      if (supabaseConfigured) {
-        try {
-          const supabase = createClient();
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
+        if (supabaseConfigured) {
+          try {
+            const supabase = createClient();
+            // Cap auth check at 800ms to avoid blocking workspace loading
+            const authResult = await withTimeout(
+              supabase.auth.getUser(),
+              800,
+              { data: { user: null }, error: null } as unknown as Awaited<ReturnType<typeof supabase.auth.getUser>>
+            );
 
-          if (user) {
-            setUserId(user.id);
+            const user = authResult?.data?.user;
 
-            // 1. Fetch user profile
-            const { data: userProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
+            if (user && isMounted) {
+              setUserId(user.id);
 
-            if (userProfile) {
-              setProfile(userProfile);
-              if (userProfile.style_sample) {
-                setStyleSampleState(userProfile.style_sample);
+              // 1. Fetch user profile (capped at 600ms)
+              const profilePromise = supabase.from('profiles').select('*').eq('id', user.id).single();
+              const profileResult = await withTimeout(
+                profilePromise,
+                600,
+                { data: null, error: null } as unknown as Awaited<typeof profilePromise>
+              );
+
+              if (profileResult?.data && isMounted) {
+                setProfile(profileResult.data as UserProfile);
+                if (profileResult.data.style_sample) {
+                  setStyleSampleState(profileResult.data.style_sample);
+                }
+              } else if (user && isMounted) {
+                // Synthesize profile from user metadata and local storage
+                const metaName =
+                  user.user_metadata?.preferred_name ||
+                  user.user_metadata?.full_name ||
+                  (typeof localStorage !== 'undefined'
+                    ? localStorage.getItem('loom_onboard_name')
+                    : '') ||
+                  user.email?.split('@')[0] ||
+                  'User';
+                const metaCat =
+                  user.user_metadata?.user_category ||
+                  (typeof localStorage !== 'undefined'
+                    ? (localStorage.getItem('loom_onboard_cat') as UserCategory)
+                    : null) ||
+                  'Professional';
+                const metaPurp =
+                  user.user_metadata?.email_purpose ||
+                  (typeof localStorage !== 'undefined'
+                    ? (localStorage.getItem('loom_onboard_purp') as EmailPurpose)
+                    : null) ||
+                  'Work';
+                const metaStyle =
+                  user.user_metadata?.preferred_style ||
+                  (typeof localStorage !== 'undefined'
+                    ? (localStorage.getItem('loom_onboard_style') as PreferredStyle)
+                    : null) ||
+                  'Professional';
+                const metaSample =
+                  user.user_metadata?.style_sample ||
+                  (typeof localStorage !== 'undefined'
+                    ? localStorage.getItem('loom-ai-style-sample')
+                    : '') ||
+                  '';
+
+                setProfile({
+                  id: user.id,
+                  preferred_name: metaName,
+                  user_category: metaCat,
+                  email_purpose: metaPurp,
+                  preferred_style: metaStyle,
+                  style_sample: metaSample,
+                  onboarding_completed: true,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+
+                if (metaSample) {
+                  setStyleSampleState(metaSample);
+                }
+
+                // If user is inside the workspace, ensure onboarding is marked complete
+                if (typeof document !== 'undefined') {
+                  document.cookie =
+                    'loom_onboarding_completed=true; path=/; max-age=31536000; SameSite=Lax';
+                }
+                if (typeof localStorage !== 'undefined') {
+                  localStorage.setItem('loom_onboarding_completed', 'true');
+                }
               }
-            }
 
-            // 2. Fetch conversations and nested messages
-            const { data: convData } = await supabase
-              .from('conversations')
-              .select(`
-                id,
-                title,
-                tone,
-                created_at,
-                updated_at,
-                messages (
+              // 2. Fetch conversations (capped at 800ms)
+              const convPromise = supabase
+                .from('conversations')
+                .select(`
                   id,
-                  role,
-                  content,
-                  is_error,
-                  created_at
-                )
-              `)
-              .eq('user_id', user.id)
-              .order('updated_at', { ascending: false });
+                  title,
+                  tone,
+                  created_at,
+                  updated_at,
+                  messages (
+                    id,
+                    role,
+                    content,
+                    is_error,
+                    created_at
+                  )
+                `)
+                .eq('user_id', user.id)
+                .order('updated_at', { ascending: false });
 
-            let loadedConvs: Conversation[] = [];
+              const convResult = await withTimeout(
+                convPromise,
+                800,
+                { data: null, error: null } as unknown as Awaited<typeof convPromise>
+              );
 
-            if (convData && convData.length > 0) {
-              const rows = convData as unknown as SupabaseConversationRow[];
-              loadedConvs = rows.map((c) => ({
-                id: c.id,
-                title: c.title,
-                tone: (c.tone as EmailTone) || null,
-                createdAt: new Date(c.created_at).getTime(),
-                updatedAt: new Date(c.updated_at).getTime(),
-                messages: (c.messages || [])
-                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                  .map((m) => ({
-                    id: m.id,
-                    role: m.role as 'user' | 'assistant',
-                    content: m.content,
-                    isError: m.is_error,
-                    timestamp: new Date(m.created_at).getTime(),
-                  })),
-              }));
-            }
+              let loadedConvs: Conversation[] = [];
 
-            // 3. Migrate local conversations if present and not migrated yet
-            if (!migratedRef.current) {
-              migratedRef.current = true;
-              const localConvs = loadLocalConversations();
-              if (localConvs.length > 0 && loadedConvs.length === 0) {
-                // Upload local conversations to Supabase
-                for (const localC of localConvs) {
-                  const { data: insertedConv } = await supabase
-                    .from('conversations')
-                    .insert({
-                      user_id: user.id,
-                      title: localC.title,
-                      tone: localC.tone,
-                    })
-                    .select()
-                    .single();
-
-                  if (insertedConv && localC.messages.length > 0) {
-                    const messagesToInsert = localC.messages.map((m) => ({
-                      conversation_id: insertedConv.id,
-                      role: m.role,
+              if (convResult?.data && Array.isArray(convResult.data) && convResult.data.length > 0) {
+                const rows = convResult.data as unknown as SupabaseConversationRow[];
+                loadedConvs = rows.map((c) => ({
+                  id: c.id,
+                  title: c.title,
+                  tone: (c.tone as EmailTone) || null,
+                  createdAt: new Date(c.created_at).getTime(),
+                  updatedAt: new Date(c.updated_at).getTime(),
+                  messages: (c.messages || [])
+                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                    .map((m) => ({
+                      id: m.id,
+                      role: m.role as 'user' | 'assistant',
                       content: m.content,
-                      is_error: m.isError || false,
-                    }));
-                    await supabase.from('messages').insert(messagesToInsert);
+                      isError: m.is_error,
+                      timestamp: new Date(m.created_at).getTime(),
+                    })),
+                }));
+              }
+
+              // 3. Fallback to local conversations if Supabase has none
+              const localConvs = loadLocalConversations();
+              const deletedIds = loadDeletedConversationIds();
+              let allConvs = loadedConvs.length > 0 ? loadedConvs : localConvs;
+              allConvs = allConvs.filter((c) => !deletedIds.has(c.id));
+
+              if (isMounted) {
+                setConversations(allConvs);
+                // Open a fresh new chat with the Claude/GPT greeting every time LOOM is opened
+                setActiveConversationId(null);
+
+                // Load style sample and tone from localStorage if not in profile
+                if (!profileResult?.data?.style_sample) {
+                  const savedStyle = loadLocalStyleSample();
+                  if (savedStyle) setStyleSampleState(savedStyle);
+                }
+                const savedTone = loadLocalActiveTone();
+                if (savedTone) setActiveToneState(savedTone);
+
+                if (typeof window !== 'undefined') {
+                  const savedTier = localStorage.getItem('loom_active_model_tier') as ModelTier | null;
+                  if (savedTier && ['silk', 'weave', 'tapestry'].includes(savedTier)) {
+                    setModelTierState(savedTier);
                   }
                 }
 
-                // Re-fetch conversations
-                const { data: refreshedConvs } = await supabase
-                  .from('conversations')
-                  .select(`
-                    id,
-                    title,
-                    tone,
-                    created_at,
-                    updated_at,
-                    messages (
-                      id,
-                      role,
-                      content,
-                      is_error,
-                      created_at
-                    )
-                  `)
-                  .eq('user_id', user.id)
-                  .order('updated_at', { ascending: false });
-
-                if (refreshedConvs) {
-                  const refreshedRows = refreshedConvs as unknown as SupabaseConversationRow[];
-                  loadedConvs = refreshedRows.map((c) => ({
-                    id: c.id,
-                    title: c.title,
-                    tone: (c.tone as EmailTone) || null,
-                    createdAt: new Date(c.created_at).getTime(),
-                    updatedAt: new Date(c.updated_at).getTime(),
-                    messages: (c.messages || [])
-                      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                      .map((m) => ({
-                        id: m.id,
-                        role: m.role as 'user' | 'assistant',
-                        content: m.content,
-                        isError: m.is_error,
-                        timestamp: new Date(m.created_at).getTime(),
-                      })),
-                  }));
-                }
+                setIsInitialized(true);
+                return;
               }
             }
-
-            setConversations(loadedConvs);
-            const savedActiveId = loadLocalActiveId();
-            if (savedActiveId && loadedConvs.some((c) => c.id === savedActiveId)) {
-              setActiveConversationId(savedActiveId);
-            } else if (loadedConvs.length > 0) {
-              setActiveConversationId(loadedConvs[0].id);
-            }
-
-            setIsInitialized(true);
-            return;
+          } catch (err) {
+            console.error('Supabase initialization fallback to localStorage:', err);
           }
-        } catch (err) {
-          console.error('Supabase initialization fallback to localStorage:', err);
+        }
+
+        // Local storage fallback for unauthenticated or local usage
+        if (isMounted) {
+          const savedConvs = loadLocalConversations();
+          const deletedIds = loadDeletedConversationIds();
+          const cleanConvs = savedConvs.filter((c) => !deletedIds.has(c.id));
+          const savedStyle = loadLocalStyleSample();
+          const savedTone = loadLocalActiveTone();
+
+          setConversations(cleanConvs);
+          setStyleSampleState(savedStyle);
+          setActiveToneState(savedTone);
+
+          if (typeof window !== 'undefined') {
+            const savedTier = localStorage.getItem('loom_active_model_tier') as ModelTier | null;
+            if (savedTier && ['silk', 'weave', 'tapestry'].includes(savedTier)) {
+              setModelTierState(savedTier);
+            }
+          }
+
+          // Open a fresh new chat with the Claude/GPT greeting every time LOOM is opened
+          setActiveConversationId(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsInitialized(true);
         }
       }
-
-      // Local storage fallback for unauthenticated or local usage
-      const savedConvs = loadLocalConversations();
-      const savedActiveId = loadLocalActiveId();
-      const savedStyle = loadLocalStyleSample();
-      const savedTone = loadLocalActiveTone();
-
-      setConversations(savedConvs);
-      setStyleSampleState(savedStyle);
-      setActiveToneState(savedTone);
-
-      if (savedActiveId && savedConvs.some((c) => c.id === savedActiveId)) {
-        setActiveConversationId(savedActiveId);
-      }
-      setIsInitialized(true);
     }
 
     initialize();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(failsafeTimer);
+    };
   }, []);
 
   // Save active conversation id locally
@@ -227,12 +320,29 @@ export function useConversations() {
     }
   }, [activeConversationId, isInitialized]);
 
-  // Sync to local storage for backup
+  // Sync to local storage for backup (always preserved, including when empty)
   useEffect(() => {
-    if (isInitialized && !userId) {
+    if (isInitialized) {
       saveLocalConversations(conversations);
     }
-  }, [conversations, isInitialized, userId]);
+  }, [conversations, isInitialized]);
+
+  // Periodic 5-hour automatic refill checker & countdown updater (every 30s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentCredits = loadLocalCredits();
+      setCreditsState(currentCredits);
+      setRefillCountdown(getTimeUntilRefillFormatted());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const setModelTier = useCallback((tier: ModelTier) => {
+    setModelTierState(tier);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('loom_active_model_tier', tier);
+    }
+  }, []);
 
   const setStyleSample = useCallback(
     async (sample: string) => {
@@ -307,6 +417,10 @@ export function useConversations() {
   }
 
   async function deleteConversation(id: string): Promise<void> {
+    // 1. Mark permanently deleted in tombstone storage so it never reappears
+    markConversationDeleted(id);
+
+    // 2. Delete from Supabase if configured
     if (userId && isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -316,13 +430,18 @@ export function useConversations() {
       }
     }
 
+    // 3. Update React state AND write directly to localStorage immediately
     setConversations((prev) => {
       const next = prev.filter((c) => c.id !== id);
-      if (activeConversationId === id) {
-        setActiveConversationId(next.length > 0 ? next[0].id : null);
-      }
+      saveLocalConversations(next);
       return next;
     });
+
+    // 4. If deleted chat was currently active, open fresh new chat with greeting
+    if (activeConversationId === id) {
+      setActiveConversationId(null);
+      saveLocalActiveId(null);
+    }
   }
 
   async function renameConversation(id: string, title: string): Promise<void> {
@@ -367,6 +486,26 @@ export function useConversations() {
         updatedAt: Date.now(),
         tone: toneToUse,
       };
+    }
+
+    const modelCost = MODEL_CREDIT_COSTS[modelTier] || 3;
+    if (credits < modelCost) {
+      const topUpId = generateId();
+      const topUpMsg: Message = {
+        id: topUpId,
+        role: 'assistant',
+        content: `You need **${modelCost} credits** to draft with **${modelTier.toUpperCase()}**, but you currently have **${credits} credits** remaining.\n\nYour credits automatically refill to 250 in **${refillCountdown}**.`,
+        timestamp: Date.now(),
+        isError: true,
+      };
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === targetConversationId
+            ? { ...c, messages: [...c.messages, topUpMsg], updatedAt: Date.now() }
+            : c
+        )
+      );
+      return;
     }
 
     const tempUserMsgId = generateId();
@@ -434,6 +573,7 @@ export function useConversations() {
         messages: conversationMessages,
         styleSample: styleSample || profile?.style_sample || null,
         tone: toneToUse,
+        modelTier,
       };
 
       const response = await fetch('/api/chat', {
@@ -458,6 +598,13 @@ export function useConversations() {
       if (data.error) {
         throw new Error(data.error);
       }
+
+      // Deduct credits for the model tier used
+      setCreditsState((prev) => {
+        const next = Math.max(0, prev - modelCost);
+        saveLocalCredits(next);
+        return next;
+      });
 
       const tempAssistantId = generateId();
       const assistantMessage: Message = {
@@ -586,9 +733,18 @@ export function useConversations() {
     isLoading,
     isInitialized,
     createConversation,
+    startNewChat: () => {
+      setActiveConversationId(null);
+      saveLocalActiveId(null);
+    },
     deleteConversation,
     renameConversation,
     setActiveConversation,
+    modelTier,
+    setModelTier,
+    credits,
+    refillCountdown,
+    creditCost: MODEL_CREDIT_COSTS[modelTier] || 3,
     sendMessage,
     retryLastMessage,
   };
