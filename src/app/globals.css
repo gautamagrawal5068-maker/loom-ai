@@ -5,7 +5,7 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 }
 
-/* Custom warm dark scrollbar */
+/* Custom aesthetic obsidian scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -16,12 +16,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2f2d2a;
-  border-radius: 3px;
+  background: #1e2230;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #423f3b;
+  background: #2d3345;
 }
 
 /* Subtle typing dot bounce */
@@ -55,15 +55,15 @@ html {
 }
 
 body {
-  background-color: #191817;
-  color: #ecebe6;
+  background-color: #090a0f;
+  color: #f8fafc;
   font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
-  background-color: rgba(204, 120, 92, 0.35);
+  background-color: rgba(6, 182, 212, 0.3);
   color: #ffffff;
 }
 

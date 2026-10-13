@@ -1,4 +1,4 @@
-import { Conversation, EmailTone } from '@/types';
+import { Conversation, EmailTone, WritingProfile, UsageStats, TokenUsage } from '@/types';
 
 export function generateId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -132,71 +132,111 @@ export function saveActiveTone(tone: EmailTone | null): void {
   }
 }
 
-const CREDITS_KEY = 'loom-ai-credits';
-const CREDITS_RESET_AT_KEY = 'loom-ai-credits-reset-at';
-export const DEFAULT_CREDITS = 250;
+const MESSAGING_TOKENS_KEY = 'loom-ai-messaging-tokens';
+const TOKENS_RESET_AT_KEY = 'loom-ai-tokens-reset-at';
+export const DEFAULT_MESSAGING_TOKENS = 50_000; // 50k tokens (~50 drafts per cycle)
+export const DEFAULT_CREDITS = DEFAULT_MESSAGING_TOKENS;
+export const MAX_CONTEXT_WINDOW_TOKENS = 100_000; // 100k tokens Claude/ChatGPT-style context capacity
+export const TOKENS_PER_MESSAGE = 1_000; // ~1k context tokens per message turn
 export const REFILL_CYCLE_HOURS = 5;
 export const REFILL_CYCLE_MS = REFILL_CYCLE_HOURS * 60 * 60 * 1000; // 5 hours in ms
 
-export function getNextRefillTime(): number {
-  if (typeof window === 'undefined') return Date.now() + REFILL_CYCLE_MS;
+/**
+ * Returns remaining countdown string ONLY when tokens are 0 and countdown is active.
+ * When tokens > 0, returns null because countdown has not started.
+ */
+export function getTokensCountdownFormatted(): string | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem(CREDITS_RESET_AT_KEY);
-    const parsed = stored ? parseInt(stored, 10) : NaN;
-    if (isNaN(parsed) || parsed <= Date.now()) {
-      const nextTime = Date.now() + REFILL_CYCLE_MS;
-      localStorage.setItem(CREDITS_RESET_AT_KEY, nextTime.toString());
-      return nextTime;
+    const stored = localStorage.getItem(TOKENS_RESET_AT_KEY);
+    if (!stored) return null;
+    const resetAt = parseInt(stored, 10);
+    if (isNaN(resetAt)) return null;
+
+    if (Date.now() >= resetAt) {
+      // 5 hours have passed: auto-refill to 50k and reset timer!
+      localStorage.removeItem(TOKENS_RESET_AT_KEY);
+      localStorage.setItem(MESSAGING_TOKENS_KEY, DEFAULT_MESSAGING_TOKENS.toString());
+      return null;
     }
-    return parsed;
+
+    const diff = Math.max(0, resetAt - Date.now());
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    }
+    return `${minutes}m ${seconds}s`;
   } catch {
-    return Date.now() + REFILL_CYCLE_MS;
+    return null;
   }
 }
 
 export function getTimeUntilRefillFormatted(): string {
-  const nextTime = getNextRefillTime();
-  const diff = Math.max(0, nextTime - Date.now());
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+  const activeCountdown = getTokensCountdownFormatted();
+  return activeCountdown || '5h 00m';
+}
+
+export function loadMessagingTokens(): number {
+  if (typeof window === 'undefined') return DEFAULT_MESSAGING_TOKENS;
+  try {
+    const resetAtRaw = localStorage.getItem(TOKENS_RESET_AT_KEY);
+    const resetAt = resetAtRaw ? parseInt(resetAtRaw, 10) : null;
+
+    // Check if 5-hour refill cycle from exhaustion has elapsed
+    if (resetAt && Date.now() >= resetAt) {
+      localStorage.removeItem(TOKENS_RESET_AT_KEY);
+      localStorage.setItem(MESSAGING_TOKENS_KEY, DEFAULT_MESSAGING_TOKENS.toString());
+      return DEFAULT_MESSAGING_TOKENS;
+    }
+
+    const data = localStorage.getItem(MESSAGING_TOKENS_KEY);
+    if (data === null) {
+      localStorage.setItem(MESSAGING_TOKENS_KEY, DEFAULT_MESSAGING_TOKENS.toString());
+      return DEFAULT_MESSAGING_TOKENS;
+    }
+    const parsed = parseInt(data, 10);
+    if (isNaN(parsed) || parsed > DEFAULT_MESSAGING_TOKENS) {
+      // Auto-migrate legacy 500k quota to 50k quota
+      localStorage.setItem(MESSAGING_TOKENS_KEY, DEFAULT_MESSAGING_TOKENS.toString());
+      return DEFAULT_MESSAGING_TOKENS;
+    }
+    return parsed;
+  } catch (error) {
+    console.error('Failed to load messaging tokens:', error);
+    return DEFAULT_MESSAGING_TOKENS;
   }
-  return `${minutes}m`;
+}
+
+export function saveMessagingTokens(tokens: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const clamped = Math.max(0, tokens);
+    localStorage.setItem(MESSAGING_TOKENS_KEY, clamped.toString());
+
+    // Strict rule: 5-hour countdown begins ONLY when tokens reach 0!
+    if (clamped === 0) {
+      const existingReset = localStorage.getItem(TOKENS_RESET_AT_KEY);
+      if (!existingReset) {
+        const nextTime = Date.now() + REFILL_CYCLE_MS;
+        localStorage.setItem(TOKENS_RESET_AT_KEY, nextTime.toString());
+      }
+    } else {
+      // Tokens are available; no refill countdown is running
+      localStorage.removeItem(TOKENS_RESET_AT_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to save messaging tokens:', error);
+  }
 }
 
 export function loadCredits(): number {
-  if (typeof window === 'undefined') return DEFAULT_CREDITS;
-  try {
-    const nextReset = localStorage.getItem(CREDITS_RESET_AT_KEY);
-    const resetTime = nextReset ? parseInt(nextReset, 10) : NaN;
-
-    // Check if 5-hour refill window has elapsed
-    if (isNaN(resetTime) || Date.now() >= resetTime) {
-      // Auto-refill back to full capacity
-      const nextTime = Date.now() + REFILL_CYCLE_MS;
-      localStorage.setItem(CREDITS_RESET_AT_KEY, nextTime.toString());
-      localStorage.setItem(CREDITS_KEY, DEFAULT_CREDITS.toString());
-      return DEFAULT_CREDITS;
-    }
-
-    const data = localStorage.getItem(CREDITS_KEY);
-    if (!data) return DEFAULT_CREDITS;
-    const parsed = parseInt(data, 10);
-    return isNaN(parsed) ? DEFAULT_CREDITS : parsed;
-  } catch (error) {
-    console.error('Failed to load credits from storage:', error);
-    return DEFAULT_CREDITS;
-  }
+  return loadMessagingTokens();
 }
 
 export function saveCredits(credits: number): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(CREDITS_KEY, credits.toString());
-  } catch (error) {
-    console.error('Failed to save credits to storage:', error);
-  }
+  saveMessagingTokens(credits);
 }
 
 const ONBOARDING_KEY = 'loom_onboarding_completed';
@@ -226,4 +266,107 @@ export function setOnboardingCompleted(completed: boolean): void {
     console.error('Failed to update onboarding completion state:', error);
   }
 }
+
+// ==============================================================================
+// Personal Writing Profile Persistence
+// ==============================================================================
+
+const WRITING_PROFILE_KEY = 'loom-ai-writing-profile';
+
+export const DEFAULT_WRITING_PROFILE: WritingProfile = {
+  styleSample: '',
+  defaultTone: null,
+  preferredLength: 'balanced',
+  writingStyle: 'professional',
+  preferredGreeting: 'Hi [Name],',
+  preferredSignoff: 'Best,',
+  preferredLanguage: 'English (US)',
+};
+
+export function loadWritingProfile(): WritingProfile {
+  if (typeof window === 'undefined') return DEFAULT_WRITING_PROFILE;
+  try {
+    const raw = localStorage.getItem(WRITING_PROFILE_KEY);
+    if (!raw) {
+      // Migrate existing styleSample if present
+      const existingSample = loadStyleSample();
+      return {
+        ...DEFAULT_WRITING_PROFILE,
+        styleSample: existingSample,
+      };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_WRITING_PROFILE,
+      ...parsed,
+    };
+  } catch (err) {
+    console.error('Failed to load writing profile from storage:', err);
+    return DEFAULT_WRITING_PROFILE;
+  }
+}
+
+export function saveWritingProfile(profile: WritingProfile): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(WRITING_PROFILE_KEY, JSON.stringify(profile));
+    if (profile.styleSample !== undefined) {
+      saveStyleSample(profile.styleSample);
+    }
+  } catch (err) {
+    console.error('Failed to save writing profile to storage:', err);
+  }
+}
+
+// ==============================================================================
+// Server-Verified Token Usage Tracker
+// ==============================================================================
+
+const USAGE_STATS_KEY = 'loom-ai-usage-stats';
+
+export const DEFAULT_USAGE_STATS: UsageStats = {
+  totalRequests: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalTokens: 0,
+  estimatedCostUsd: 0,
+  lastModelUsed: 'Weave',
+};
+
+export function loadUsageStats(): UsageStats {
+  if (typeof window === 'undefined') return DEFAULT_USAGE_STATS;
+  try {
+    const raw = localStorage.getItem(USAGE_STATS_KEY);
+    if (!raw) return DEFAULT_USAGE_STATS;
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_USAGE_STATS,
+      ...parsed,
+    };
+  } catch (err) {
+    console.error('Failed to load usage stats:', err);
+    return DEFAULT_USAGE_STATS;
+  }
+}
+
+export function recordUsage(usage: TokenUsage): UsageStats {
+  if (typeof window === 'undefined') return DEFAULT_USAGE_STATS;
+  try {
+    const current = loadUsageStats();
+    const updated: UsageStats = {
+      totalRequests: current.totalRequests + 1,
+      totalInputTokens: current.totalInputTokens + usage.promptTokens,
+      totalOutputTokens: current.totalOutputTokens + usage.candidatesTokens,
+      totalTokens: current.totalTokens + usage.totalTokens,
+      estimatedCostUsd: Math.round((current.estimatedCostUsd + usage.estimatedCostUsd) * 1_000_000) / 1_000_000,
+      lastModelUsed: usage.model,
+    };
+    localStorage.setItem(USAGE_STATS_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (err) {
+    console.error('Failed to record token usage:', err);
+    return DEFAULT_USAGE_STATS;
+  }
+}
+
 

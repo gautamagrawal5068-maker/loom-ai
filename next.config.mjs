@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   outputFileTracingRoot: __dirname,
   devIndicators: false,
+  reactStrictMode: false,
 };
 
 export default nextConfig;

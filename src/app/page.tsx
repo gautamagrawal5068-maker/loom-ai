@@ -190,29 +190,29 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col bg-[#070709] text-zinc-100 selection:bg-purple-900/40 selection:text-white relative overflow-hidden font-sans">
-      {/* Subtle Top Radial Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-b from-purple-900/20 via-pink-900/10 to-transparent blur-[120px] pointer-events-none" />
-      <div className="absolute top-[800px] right-1/4 w-[500px] h-[500px] bg-cyan-900/10 blur-[140px] pointer-events-none" />
+    <div className="min-h-dvh flex flex-col bg-[#090a0f] text-[#f8fafc] selection:bg-cyan-500/30 selection:text-white relative overflow-hidden font-sans">
+      {/* Subtle Radiant Ambient Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-cyan-500/10 via-purple-500/5 to-transparent blur-3xl pointer-events-none" />
+      <div className="absolute top-[600px] right-1/4 w-[400px] h-[300px] bg-purple-500/5 blur-3xl pointer-events-none" />
 
       {/* Sticky Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-white/[0.06] bg-[#070709]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 w-full border-b border-white/[0.08] bg-[#090a0f]/85 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
             <Logo size="md" />
-            <span className="font-mono text-sm font-semibold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
+            <span className="font-mono text-sm font-semibold tracking-tight text-[#f8fafc] group-hover:text-cyan-300 transition-colors">
               LOOM.AI
             </span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-7 text-xs font-medium text-zinc-400">
-            <a href="#demo" className="hover:text-white transition-colors">
+            <a href="#demo" className="hover:text-[#f8fafc] transition-colors">
               Interactive Demo
             </a>
-            <a href="#features" className="hover:text-white transition-colors">
+            <a href="#features" className="hover:text-[#f8fafc] transition-colors">
               Features
             </a>
-            <a href="#security" className="hover:text-white transition-colors">
+            <a href="#security" className="hover:text-[#f8fafc] transition-colors">
               Security
             </a>
           </nav>
@@ -221,7 +221,7 @@ export default function LandingPage() {
             {isAuthenticated ? (
               <Link
                 href="/app"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-zinc-950 font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold transition-all shadow-[0_0_20px_rgba(6,182,212,0.25)]"
               >
                 <span>Open Workspace</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -230,13 +230,13 @@ export default function LandingPage() {
               <>
                 <Link
                   href="/auth"
-                  className="px-3.5 py-2 rounded-xl text-zinc-400 hover:text-white transition-colors"
+                  className="px-3.5 py-2 rounded-xl text-zinc-400 hover:text-[#f8fafc] transition-colors"
                 >
                   Sign In
                 </Link>
                 <Link
-                  href="/auth"
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-zinc-950 font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+                  href="/app"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold transition-all shadow-[0_0_20px_rgba(6,182,212,0.25)]"
                 >
                   <span>Start Writing</span>
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -249,16 +249,16 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative z-10 pt-16 sm:pt-24 pb-16 px-4 sm:px-6 max-w-5xl mx-auto w-full text-center flex flex-col items-center">
-        {/* Brand Tagline Badge without extra giant logos */}
-        <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-950/20 text-zinc-300 text-xs font-mono mb-6 backdrop-blur-md shadow-[0_0_25px_rgba(168,85,247,0.2)]">
+        {/* Brand Tagline Badge */}
+        <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-white/[0.08] bg-[#0d0f17] text-zinc-300 text-xs font-mono mb-6 backdrop-blur-md shadow-sm">
           <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
           <span>Personalized Email Intelligence • Zero AI Clichés</span>
         </div>
 
         {/* Main Headline */}
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white max-w-4xl leading-[1.08]">
+        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-[#f8fafc] max-w-4xl leading-[1.08]">
           Your emails, written the way{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-cyan-300">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#f8fafc] via-[#cbd5e1] to-cyan-400">
             you would write them.
           </span>
         </h1>
@@ -272,8 +272,8 @@ export default function LandingPage() {
         {/* CTA Buttons */}
         <div className="mt-9 flex flex-col sm:flex-row items-center gap-3.5 w-full sm:w-auto">
           <Link
-            href={isAuthenticated ? '/app' : '/auth'}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-white text-zinc-950 font-semibold text-sm hover:bg-zinc-200 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+            href="/app"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold text-sm transition-all shadow-[0_0_30px_rgba(6,182,212,0.25)]"
           >
             <span>{isAuthenticated ? 'Enter Workspace' : 'Start Writing Free'}</span>
             <ArrowRight className="w-4 h-4" />
@@ -281,22 +281,22 @@ export default function LandingPage() {
 
           <a
             href="#demo"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-white/[0.1] bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white font-medium text-sm transition-all"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-white/[0.08] bg-[#0d0f17] hover:bg-[#121520] hover:border-white/[0.15] text-zinc-300 hover:text-[#f8fafc] font-medium text-sm transition-all shadow-xs"
           >
             <span>Compare AI Styles</span>
           </a>
         </div>
 
         {/* Trust Badges */}
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs text-zinc-500 font-medium">
+        <div className="mt-12 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs text-zinc-400 font-medium">
           <span className="flex items-center gap-1.5">
             <Check className="w-3.5 h-3.5 text-cyan-400" /> Learns from your writing style
           </span>
           <span className="flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 text-purple-400" /> 6 calibrated email tones
+            <Check className="w-3.5 h-3.5 text-cyan-400" /> 6 calibrated email tones
           </span>
           <span className="flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 text-pink-400" /> Secure PostgreSQL & RLS
+            <Check className="w-3.5 h-3.5 text-cyan-400" /> Secure PostgreSQL & RLS
           </span>
         </div>
       </section>
@@ -304,10 +304,10 @@ export default function LandingPage() {
       {/* Interactive Live Email Demo */}
       <section id="demo" className="relative z-10 py-16 px-4 sm:px-6 max-w-4xl mx-auto w-full">
         <div className="text-center mb-8">
-          <div className="inline-block font-mono text-[11px] font-semibold text-purple-400 uppercase tracking-widest mb-2">
+          <div className="inline-block font-mono text-[11px] font-semibold text-cyan-400 uppercase tracking-widest mb-2">
             Interactive Experience
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#f8fafc]">
             See how LOOM AI calibrates tone
           </h2>
           <p className="text-sm text-zinc-400 mt-2 max-w-lg mx-auto">
@@ -317,13 +317,13 @@ export default function LandingPage() {
 
         {/* Interactive Comparison Mode Toggle */}
         <div className="flex items-center justify-center mb-5">
-          <div className="p-1 rounded-xl bg-zinc-900/80 border border-white/[0.08] flex items-center gap-1 shadow-lg">
+          <div className="p-1 rounded-xl bg-[#0d0f17] border border-white/[0.08] flex items-center gap-1 shadow-lg">
             <button
               onClick={() => setViewMode('loom')}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
                 viewMode === 'loom'
-                  ? 'bg-gradient-to-r from-pink-500 via-purple-600 to-cyan-500 text-white shadow-[0_0_15px_rgba(217,70,239,0.35)]'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                  : 'text-zinc-400 hover:text-[#f8fafc]'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -333,8 +333,8 @@ export default function LandingPage() {
               onClick={() => setViewMode('generic')}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
                 viewMode === 'generic'
-                  ? 'bg-red-950/60 text-red-300 border border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-red-950/40 text-red-300 border border-red-500/40 shadow-xs'
+                  : 'text-zinc-400 hover:text-[#f8fafc]'
               }`}
             >
               <span>Generic AI (Robotic Clichés)</span>
@@ -350,8 +350,8 @@ export default function LandingPage() {
               onClick={() => setActiveTone(tone)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
                 activeTone === tone
-                  ? 'bg-white text-zinc-950 font-semibold shadow-[0_0_16px_rgba(255,255,255,0.25)] scale-102'
-                  : 'bg-zinc-900/80 text-zinc-400 border border-white/[0.08] hover:border-white/[0.18] hover:text-white'
+                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/50 shadow-[0_0_16px_rgba(6,182,212,0.2)] scale-102'
+                  : 'bg-[#0d0f17] text-zinc-400 border border-white/[0.08] hover:border-white/[0.15] hover:text-[#f8fafc]'
               }`}
             >
               {tone}
@@ -360,13 +360,13 @@ export default function LandingPage() {
         </div>
 
         {/* Premium Email Card Container */}
-        <div className={`rounded-2xl border transition-all overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] ${
+        <div className={`rounded-2xl border transition-all overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] ${
           viewMode === 'loom'
-            ? 'border-purple-500/30 bg-[#0d0d12]'
-            : 'border-red-500/30 bg-[#120a0d]'
+            ? 'border-white/[0.08] bg-[#0d0f17]'
+            : 'border-red-900/40 bg-[#160d0e]'
         }`}>
           {/* Email Client Top Bar */}
-          <div className="bg-[#12121a] border-b border-white/[0.06] px-5 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="bg-[#090a0f] border-b border-white/[0.08] px-5 py-3 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
@@ -374,14 +374,14 @@ export default function LandingPage() {
                 <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
               </div>
               <span className="text-xs font-mono text-zinc-400 ml-1">
-                Tone: <strong className="text-white">{activeTone}</strong>
+                Tone: <strong className="text-[#f8fafc]">{activeTone}</strong>
               </span>
 
               {/* Metric Badge */}
               <span className={`text-[11px] font-mono px-2 py-0.5 rounded-md border ${
                 viewMode === 'loom'
-                  ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
-                  : 'bg-red-950/40 text-red-300 border-red-500/30'
+                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30'
+                  : 'bg-red-950/40 text-red-400 border-red-500/30'
               }`}>
                 {viewMode === 'loom' ? 'Cliché Score: 0% (Human)' : 'Cliché Score: 88% (AI Slop)'}
               </span>
@@ -391,7 +391,7 @@ export default function LandingPage() {
               <span className="hidden sm:inline">{wordCount} words • ~{readSeconds}s</span>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-700 border border-white/[0.08] rounded-lg px-3 py-1 transition-all cursor-pointer shadow-xs"
+                className="flex items-center gap-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-3 py-1 transition-all cursor-pointer shadow-xs"
               >
                 {copied ? (
                   <>
@@ -409,23 +409,23 @@ export default function LandingPage() {
           </div>
 
           {/* Email Headers */}
-          <div className="px-6 py-3.5 border-b border-white/[0.04] bg-white/[0.01] space-y-2 text-xs font-mono">
+          <div className="px-6 py-3.5 border-b border-white/[0.08] bg-white/[0.01] space-y-2 text-xs font-mono">
             <div className="flex items-center">
               <span className="w-16 text-zinc-500">To:</span>
               <span className="text-zinc-300">{currentDraft.recipient}</span>
             </div>
             <div className="flex items-baseline">
               <span className="w-16 text-zinc-500">Subject:</span>
-              <span className={`font-semibold ${viewMode === 'loom' ? 'text-white' : 'text-red-200'}`}>
+              <span className={`font-semibold ${viewMode === 'loom' ? 'text-[#f8fafc]' : 'text-red-200'}`}>
                 {currentDraft.subject}
               </span>
             </div>
           </div>
 
           {/* Email Body Content */}
-          <div className="p-6 sm:p-8 text-sm text-zinc-200 leading-relaxed space-y-4 font-sans">
+          <div className="p-6 sm:p-8 text-sm text-zinc-300 leading-relaxed space-y-4 font-sans">
             {currentDraft.body.map((paragraph, index) => (
-              <p key={index} className={viewMode === 'generic' ? 'text-red-100/90' : 'text-zinc-200'}>
+              <p key={index} className={viewMode === 'generic' ? 'text-red-200/90' : 'text-zinc-300'}>
                 {paragraph}
               </p>
             ))}
@@ -439,7 +439,7 @@ export default function LandingPage() {
           <div className="inline-block font-mono text-[11px] font-semibold text-cyan-400 uppercase tracking-widest mb-2">
             Engineered For Excellence
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#f8fafc]">
             Everything you need to write like a pro
           </h2>
           <p className="text-sm text-zinc-400 mt-2.5 max-w-xl mx-auto">
@@ -449,68 +449,68 @@ export default function LandingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Feature 1 */}
-          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0d12] hover:border-white/[0.16] transition-all flex flex-col justify-between">
+          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0f17] hover:border-white/[0.15] transition-all flex flex-col justify-between shadow-xs">
             <div>
-              <div className="w-10 h-10 rounded-xl bg-purple-950/60 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mb-5">
                 <Sparkles className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-white mb-2">
+              <h3 className="text-base font-bold text-[#f8fafc] mb-2">
                 Personal Style Mirror
               </h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Paste an example of your past emails. LOOM AI analyzes your typical sentence lengths, vocabulary choices, sign-offs, and greeting habits so every output sounds genuinely yours.
               </p>
             </div>
-            <div className="mt-6 pt-4 border-t border-white/[0.06] text-[11px] text-zinc-500 font-mono">
+            <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-zinc-500 font-mono">
               Zero robotic AI clichés
             </div>
           </div>
 
           {/* Feature 2 */}
-          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0d12] hover:border-white/[0.16] transition-all flex flex-col justify-between">
+          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0f17] hover:border-white/[0.15] transition-all flex flex-col justify-between shadow-xs">
             <div>
-              <div className="w-10 h-10 rounded-xl bg-pink-950/60 border border-pink-500/30 flex items-center justify-center text-pink-400 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mb-5">
                 <Sliders className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-white mb-2">
+              <h3 className="text-base font-bold text-[#f8fafc] mb-2">
                 6 Dynamic Tone Presets
               </h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Formal, Friendly, Assertive, Apologetic, Concise, or Persuasive. Adapt instantly whether you are emailing a Fortune 500 board or pinging a teammate on Slack.
               </p>
             </div>
-            <div className="mt-6 pt-4 border-t border-white/[0.06] text-[11px] text-zinc-500 font-mono">
+            <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-zinc-500 font-mono">
               One-click tone calibration
             </div>
           </div>
 
           {/* Feature 3 */}
-          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0d12] hover:border-white/[0.16] transition-all flex flex-col justify-between">
+          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0f17] hover:border-white/[0.15] transition-all flex flex-col justify-between shadow-xs">
             <div>
-              <div className="w-10 h-10 rounded-xl bg-cyan-950/60 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mb-5">
                 <Repeat className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-white mb-2">
+              <h3 className="text-base font-bold text-[#f8fafc] mb-2">
                 Multi-Turn Iteration
               </h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Never start over. Ask LOOM to “make it punchier”, “soften the deadline ask”, or “add a bulleted roadmap” while preserving full conversational context.
+                Never start over. Ask LOOM to “make it punchier”, “soften the deadline ask”, or “add a bulleted roadmap” while preserving full conversational context up to 100k tokens.
               </p>
             </div>
-            <div className="mt-6 pt-4 border-t border-white/[0.06] text-[11px] text-zinc-500 font-mono">
-              Real-time conversational refinement
+            <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-zinc-500 font-mono">
+              Claude & ChatGPT style 100k context window
             </div>
           </div>
         </div>
 
         {/* Bottom Banner Card */}
-        <div id="security" className="mt-5 p-7 sm:p-9 rounded-2xl border border-white/[0.08] bg-[#0d0d12] flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div id="security" className="mt-5 p-7 sm:p-9 rounded-2xl border border-white/[0.08] bg-[#0d0f17] flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xs">
           <div className="flex items-start gap-4">
-            <div className="w-11 h-11 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
+            <div className="w-11 h-11 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 shrink-0 mt-0.5">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white mb-1">
+              <h3 className="text-base font-bold text-[#f8fafc] mb-1">
                 Enterprise Data Isolation with Row Level Security
               </h3>
               <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
@@ -521,7 +521,7 @@ export default function LandingPage() {
 
           <Link
             href="/auth"
-            className="shrink-0 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/[0.1] text-xs font-semibold text-white transition-all shadow-xs"
+            className="shrink-0 px-5 py-2.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] text-xs font-semibold text-[#f8fafc] transition-all shadow-xs"
           >
             Create Secure Account
           </Link>
@@ -530,14 +530,14 @@ export default function LandingPage() {
 
       {/* Final Call to Action */}
       <section className="relative z-10 py-20 px-4 sm:px-6 max-w-3xl mx-auto w-full text-center">
-        <div className="p-10 sm:p-14 rounded-3xl border border-white/[0.12] bg-gradient-to-b from-[#12121a] to-[#0a0a0e] shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-purple-500/20 blur-3xl pointer-events-none" />
+        <div className="p-10 sm:p-14 rounded-3xl border border-white/[0.08] bg-[#0d0f17] shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-cyan-500/10 blur-3xl pointer-events-none" />
 
-          <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.1] flex items-center justify-center text-purple-300 mx-auto mb-6 shadow-md">
+          <div className="w-12 h-12 rounded-2xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mx-auto mb-6 shadow-md">
             <Sparkles className="w-6 h-6 text-cyan-400" />
           </div>
 
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#f8fafc] mb-3">
             Start writing natural emails today
           </h2>
           <p className="text-sm text-zinc-400 max-w-md mx-auto mb-8 leading-relaxed">
@@ -545,8 +545,8 @@ export default function LandingPage() {
           </p>
 
           <Link
-            href={isAuthenticated ? '/app' : '/auth'}
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-zinc-950 font-semibold text-sm hover:bg-zinc-200 transition-all shadow-[0_0_30px_rgba(255,255,255,0.25)]"
+            href="/app"
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold text-sm transition-all shadow-[0_0_30px_rgba(6,182,212,0.25)]"
           >
             <span>{isAuthenticated ? 'Go to Workspace' : 'Get Started with LOOM AI'}</span>
             <ArrowRight className="w-4 h-4" />
@@ -555,25 +555,23 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="w-full border-t border-white/[0.06] py-8 px-4 sm:px-6 relative z-10 bg-[#070709]">
+      <footer className="w-full border-t border-white/[0.08] py-8 px-4 sm:px-6 relative z-10 bg-[#090a0f]">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-pink-500 via-purple-600 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold font-mono">
-              L
-            </div>
-            <span className="font-mono text-white font-semibold">LOOM.AI</span>
+            <Logo size="sm" />
+            <span className="font-mono text-[#f8fafc] font-semibold">LOOM.AI</span>
           </div>
 
           <p>© 2026 LOOM AI. Your emails, written the way you would write them.</p>
 
           <div className="flex items-center gap-5">
-            <Link href="/auth" className="hover:text-white transition-colors">
+            <Link href="/auth" className="hover:text-[#f8fafc] transition-colors">
               Sign In
             </Link>
-            <Link href="/onboarding" className="hover:text-white transition-colors">
+            <Link href="/onboarding" className="hover:text-[#f8fafc] transition-colors">
               Onboarding
             </Link>
-            <Link href="/app" className="hover:text-white transition-colors">
+            <Link href="/app" className="hover:text-[#f8fafc] transition-colors">
               Workspace
             </Link>
           </div>

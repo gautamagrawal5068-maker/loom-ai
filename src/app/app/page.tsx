@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useConversations } from '@/hooks/useConversations';
 import { Sidebar } from '@/components/Sidebar';
 import { ChatArea } from '@/components/ChatArea';
 import { StyleModal } from '@/components/StyleModal';
-import { Loader2, Sparkles } from 'lucide-react';
+import { TemplatesModal } from '@/components/TemplatesModal';
+import { ReplySummarizeModal } from '@/components/ReplySummarizeModal';
+
 
 export default function WorkspacePage() {
   const {
@@ -13,66 +15,54 @@ export default function WorkspacePage() {
     activeConversation,
     activeConversationId,
     styleSample,
-    setStyleSample,
+    writingProfile,
+    setWritingProfile,
+    usageStats,
+    updateMessageDraft,
     activeTone,
     setActiveTone,
     modelTier,
     setModelTier,
-    credits,
-    refillCountdown,
-    creditCost,
     profile,
     isLoading,
-    isInitialized,
     startNewChat,
     deleteConversation,
     renameConversation,
     setActiveConversation,
+    remainingTokens,
+    tokensCountdown,
     sendMessage,
     retryLastMessage,
   } = useConversations();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [styleModalOpen, setStyleModalOpen] = useState(false);
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  const [replyModalOpen, setReplyModalOpen] = useState(false);
+  const [replyModalInitialTab, setReplyModalInitialTab] = useState<'reply' | 'summarize'>('reply');
+  const [activeInitialPrompt, setActiveInitialPrompt] = useState<string | undefined>(undefined);
 
-  // Safety fallback: ensure workspace loads within 1200ms even on slow networks
-  const [forceReady, setForceReady] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setForceReady(true), 1200);
-    return () => clearTimeout(timer);
-  }, []);
 
-  // Initial loader while reading Supabase / localStorage session
-  if (!isInitialized && !forceReady) {
-    return (
-      <div className="h-dvh flex items-center justify-center bg-[#191817]">
-        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
-          <div className="w-12 h-12 rounded-2xl bg-[#242220] border border-white/[0.08] flex items-center justify-center text-[#cc785c] shadow-sm">
-            <Sparkles className="w-5 h-5 text-[#cc785c]" />
-          </div>
-          <div className="flex items-center gap-2 text-xs font-mono text-[#9f9d96]">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#cc785c]" />
-            <span>Initializing workspace...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   function handleNewChat() {
     startNewChat();
     setSidebarOpen(false);
+    setActiveInitialPrompt(undefined);
   }
 
   function handleSelectConversation(id: string) {
     setActiveConversation(id);
     setSidebarOpen(false);
+    setActiveInitialPrompt(undefined);
   }
 
-  const hasStyleSample = styleSample.trim().length > 0 || (profile?.style_sample?.trim().length ?? 0) > 0;
+  const hasStyleSample =
+    (styleSample && styleSample.trim().length > 0) ||
+    (writingProfile?.styleSample && writingProfile.styleSample.trim().length > 0) ||
+    (profile?.style_sample?.trim().length ?? 0) > 0;
 
   return (
-    <div className="h-dvh flex overflow-hidden bg-[#191817] font-sans antialiased text-[#ecebe6]">
+    <div className="h-dvh flex overflow-hidden bg-[#090a0f] font-sans antialiased text-[#f8fafc]">
       {/* Sidebar navigation */}
       <Sidebar
         conversations={conversations}
@@ -92,27 +82,60 @@ export default function WorkspacePage() {
       <ChatArea
         conversation={activeConversation}
         isLoading={isLoading}
-        onSendMessage={sendMessage}
+        onSendMessage={(content) => {
+          sendMessage(content);
+          setActiveInitialPrompt(undefined);
+        }}
         onRetry={retryLastMessage}
         onOpenSidebar={() => setSidebarOpen(true)}
         activeTone={activeTone}
         onSelectTone={setActiveTone}
         modelTier={modelTier}
         onSelectModelTier={setModelTier}
-        credits={credits}
-        refillCountdown={refillCountdown}
+        usageStats={usageStats}
         userName={profile?.preferred_name || undefined}
-        creditCost={creditCost}
-        styleSample={styleSample || profile?.style_sample || ''}
+        hasStyleSample={hasStyleSample}
         onOpenStyleModal={() => setStyleModalOpen(true)}
+        onOpenTemplatesModal={() => setTemplatesModalOpen(true)}
+        onOpenReplyModal={() => {
+          setReplyModalInitialTab('reply');
+          setReplyModalOpen(true);
+        }}
+        onOpenSummarizeModal={() => {
+          setReplyModalInitialTab('summarize');
+          setReplyModalOpen(true);
+        }}
+        remainingTokens={remainingTokens}
+        tokensCountdown={tokensCountdown}
+        onUpdateMessageDraft={updateMessageDraft}
+        activeInitialPrompt={activeInitialPrompt}
       />
 
-      {/* Personal Writing Style Modal */}
+      {/* Personal Writing Profile & Voice Modal */}
       <StyleModal
         isOpen={styleModalOpen}
         onClose={() => setStyleModalOpen(false)}
-        styleSample={styleSample || profile?.style_sample || ''}
-        onSaveStyle={setStyleSample}
+        writingProfile={writingProfile}
+        onSaveProfile={setWritingProfile}
+      />
+
+      {/* Email Templates Modal */}
+      <TemplatesModal
+        isOpen={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        onSelectTemplate={(templatePrompt) => {
+          setActiveInitialPrompt(templatePrompt);
+        }}
+      />
+
+      {/* Reply & Summarization Modal */}
+      <ReplySummarizeModal
+        isOpen={replyModalOpen}
+        onClose={() => setReplyModalOpen(false)}
+        initialTab={replyModalInitialTab}
+        onGenerateDraft={(prompt, context) => {
+          sendMessage(prompt, context);
+        }}
       />
     </div>
   );

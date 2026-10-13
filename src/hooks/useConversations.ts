@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Conversation, Message, ChatResponse, EmailTone, ChatRequest, UserProfile, ModelTier, MODEL_CREDIT_COSTS, UserCategory, EmailPurpose, PreferredStyle } from '@/types';
+import { Conversation, Message, ChatResponse, EmailTone, ChatRequest, UserProfile, ModelTier, MODEL_CREDIT_COSTS, UserCategory, EmailPurpose, PreferredStyle, WritingProfile, UsageStats } from '@/types';
 import {
   generateId,
   loadConversations as loadLocalConversations,
@@ -14,8 +14,15 @@ import {
   loadCredits as loadLocalCredits,
   saveCredits as saveLocalCredits,
   getTimeUntilRefillFormatted,
+  getTokensCountdownFormatted,
   loadDeletedConversationIds,
   markConversationDeleted,
+  loadWritingProfile,
+  saveWritingProfile,
+  DEFAULT_WRITING_PROFILE,
+  loadUsageStats,
+  DEFAULT_USAGE_STATS,
+  recordUsage,
 } from '@/lib/storage';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -70,35 +77,46 @@ export function useConversations() {
   const [styleSample, setStyleSampleState] = useState<string>('');
   const [activeTone, setActiveToneState] = useState<EmailTone | null>(null);
   const [modelTier, setModelTierState] = useState<ModelTier>('weave');
-  const [credits, setCreditsState] = useState<number>(() => loadLocalCredits());
-  const [refillCountdown, setRefillCountdown] = useState<string>(() => getTimeUntilRefillFormatted());
+  const [credits, setCreditsState] = useState<number>(50000);
+  const [tokensCountdown, setTokensCountdown] = useState<string | null>(null);
+  const [refillCountdown, setRefillCountdown] = useState<string>('5h 00m');
+  const [writingProfile, setWritingProfileState] = useState<WritingProfile>(DEFAULT_WRITING_PROFILE);
+  const [usageStats, setUsageStats] = useState<UsageStats>(DEFAULT_USAGE_STATS);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isClientLoaded, setIsClientLoaded] = useState(false);
 
-  // Initialize from Supabase or localStorage with guaranteed timeout failsafe
+  // Load client local storage cleanly on mount to prevent SSR hydration mismatch
+  useEffect(() => {
+    try {
+      const local = loadLocalConversations();
+      const deletedIds = loadDeletedConversationIds();
+      const valid = local.filter((c) => !deletedIds.has(c.id));
+      setConversations(valid);
+      setCreditsState(loadLocalCredits());
+      setTokensCountdown(getTokensCountdownFormatted());
+      setRefillCountdown(getTimeUntilRefillFormatted());
+      setWritingProfileState(loadWritingProfile());
+      setUsageStats(loadUsageStats());
+      const localSample = loadLocalStyleSample();
+      if (localSample) setStyleSampleState(localSample);
+      const localTone = loadLocalActiveTone();
+      if (localTone) setActiveToneState(localTone);
+      const savedTier = localStorage.getItem('loom_active_model_tier') as ModelTier | null;
+      if (savedTier) setModelTierState(savedTier);
+    } catch (err) {
+      console.error('Error loading local storage state:', err);
+    } finally {
+      setIsClientLoaded(true);
+      setIsInitialized(true);
+    }
+  }, []);
+
+  // Initialize from Supabase in background without blocking UI
   useEffect(() => {
     let isMounted = true;
-
-    // Guaranteed failsafe timer: forces workspace ready after 1200ms under ANY circumstance
-    const failsafeTimer = setTimeout(() => {
-      if (isMounted) {
-        setIsInitialized((prev) => {
-          if (!prev) {
-            console.warn('[useConversations] Failsafe: workspace forced ready after 1200ms.');
-            const fallbackConvs = loadLocalConversations();
-            const deletedIds = loadDeletedConversationIds();
-            const cleanConvs = fallbackConvs.filter((c) => !deletedIds.has(c.id));
-            setConversations(cleanConvs);
-            // Every time LOOM opens, start on a fresh new chat with personalized greeting
-            setActiveConversationId(null);
-            return true;
-          }
-          return prev;
-        });
-      }
-    }, 1200);
 
     async function initialize() {
       try {
@@ -309,7 +327,6 @@ export function useConversations() {
 
     return () => {
       isMounted = false;
-      clearTimeout(failsafeTimer);
     };
   }, []);
 
@@ -327,13 +344,18 @@ export function useConversations() {
     }
   }, [conversations, isInitialized]);
 
-  // Periodic 5-hour automatic refill checker & countdown updater (every 30s)
+  // Periodic 5-hour automatic refill checker & live 1-second countdown updater
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateCountdown = () => {
       const currentCredits = loadLocalCredits();
       setCreditsState(currentCredits);
-      setRefillCountdown(getTimeUntilRefillFormatted());
-    }, 30000);
+      const countdown = getTokensCountdownFormatted();
+      setTokensCountdown(countdown);
+      setRefillCountdown(countdown || '5h 00m');
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -471,7 +493,11 @@ export function useConversations() {
     }
   }
 
-  async function sendMessage(content: string, overrideTone?: EmailTone | null): Promise<void> {
+  async function sendMessage(
+    content: string,
+    requestContext?: string,
+    overrideTone?: EmailTone | null
+  ): Promise<void> {
     const toneToUse = overrideTone !== undefined ? overrideTone : activeTone;
     let targetConversationId = activeConversationId;
     let currentConv = conversations.find((c) => c.id === targetConversationId);
@@ -488,13 +514,14 @@ export function useConversations() {
       };
     }
 
-    const modelCost = MODEL_CREDIT_COSTS[modelTier] || 3;
-    if (credits < modelCost) {
+    if (credits <= 0) {
+      const activeCountdown = getTokensCountdownFormatted() || '5h 00m';
+      setTokensCountdown(activeCountdown);
       const topUpId = generateId();
       const topUpMsg: Message = {
         id: topUpId,
         role: 'assistant',
-        content: `You need **${modelCost} credits** to draft with **${modelTier.toUpperCase()}**, but you currently have **${credits} credits** remaining.\n\nYour credits automatically refill to 250 in **${refillCountdown}**.`,
+        content: `You have consumed your **50,000 token limit** (50k tokens).\n\nUsage is paused for **5 hours**. Your messaging allowance will automatically refill in **${activeCountdown}**.`,
         timestamp: Date.now(),
         isError: true,
       };
@@ -569,11 +596,14 @@ export function useConversations() {
     setIsLoading(true);
 
     try {
+      const effectiveContext = requestContext || currentConv.context || null;
       const payload: ChatRequest = {
         messages: conversationMessages,
-        styleSample: styleSample || profile?.style_sample || null,
+        styleSample: writingProfile?.styleSample || styleSample || profile?.style_sample || null,
         tone: toneToUse,
         modelTier,
+        context: effectiveContext,
+        writingProfile: writingProfile || null,
       };
 
       const response = await fetch('/api/chat', {
@@ -599,10 +629,20 @@ export function useConversations() {
         throw new Error(data.error);
       }
 
-      // Deduct credits for the model tier used
+      // Record genuine token usage from server
+      if (data.usage) {
+        const updated = recordUsage(data.usage);
+        setUsageStats(updated);
+      }
+
+      // Deduct tokens consumed from 50k token pool
+      const tokensConsumed = data.usage?.totalTokens || MODEL_CREDIT_COSTS[modelTier] || 1000;
       setCreditsState((prev) => {
-        const next = Math.max(0, prev - modelCost);
+        const next = Math.max(0, prev - tokensConsumed);
         saveLocalCredits(next);
+        if (next === 0) {
+          setTokensCountdown(getTokensCountdownFormatted() || '5h 00m');
+        }
         return next;
       });
 
@@ -612,6 +652,9 @@ export function useConversations() {
         role: 'assistant',
         content: data.content,
         timestamp: Date.now(),
+        tokensUsed: tokensConsumed,
+        modelTier: (data.usage?.modelTier as ModelTier) || modelTier,
+        timeTakenSec: data.usage?.timeTakenSec,
       };
 
       setConversations((prev) =>
@@ -720,18 +763,84 @@ export function useConversations() {
     }, 50);
   }
 
+  const setWritingProfile = useCallback((newProf: WritingProfile) => {
+    setWritingProfileState(newProf);
+    saveWritingProfile(newProf);
+    if (newProf.styleSample !== undefined) {
+      setStyleSampleState(newProf.styleSample);
+      saveLocalStyleSample(newProf.styleSample);
+    }
+    if (newProf.defaultTone) {
+      setActiveToneState(newProf.defaultTone);
+      saveLocalActiveTone(newProf.defaultTone);
+    }
+    if (userId && isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        supabase.from('profiles').update({
+          style_sample: newProf.styleSample,
+          updated_at: new Date().toISOString(),
+        }).eq('id', userId);
+      } catch (err) {
+        console.error('Supabase profile update error:', err);
+      }
+    }
+  }, [userId]);
+
+  const updateActiveContext = useCallback((newContext: string) => {
+    if (!activeConversationId) return;
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === activeConversationId
+          ? { ...c, context: newContext, updatedAt: Date.now() }
+          : c
+      )
+    );
+  }, [activeConversationId]);
+
+  const updateMessageDraft = useCallback(
+    async (messageId: string, subject: string, body: string) => {
+      const newContent = `Subject: ${subject}\n\n${body}`;
+      setConversations((prev) =>
+        prev.map((c) => ({
+          ...c,
+          messages: c.messages.map((m) =>
+            m.id === messageId ? { ...m, content: newContent } : m
+          ),
+          updatedAt: Date.now(),
+        }))
+      );
+
+      if (userId && isSupabaseConfigured()) {
+        try {
+          const supabase = createClient();
+          await supabase.from('messages').update({ content: newContent }).eq('id', messageId);
+        } catch (err) {
+          console.error('Supabase message update error:', err);
+        }
+      }
+    },
+    [userId]
+  );
+
   return {
     conversations,
     activeConversation,
     activeConversationId,
     styleSample,
     setStyleSample,
+    writingProfile,
+    setWritingProfile,
+    usageStats,
+    updateActiveContext,
+    updateMessageDraft,
     activeTone,
     setActiveTone,
     profile,
     userId,
     isLoading,
     isInitialized,
+    isClientLoaded,
     createConversation,
     startNewChat: () => {
       setActiveConversationId(null);
@@ -743,8 +852,10 @@ export function useConversations() {
     modelTier,
     setModelTier,
     credits,
+    remainingTokens: credits,
+    tokensCountdown,
     refillCountdown,
-    creditCost: MODEL_CREDIT_COSTS[modelTier] || 3,
+    creditCost: MODEL_CREDIT_COSTS[modelTier] || 1000,
     sendMessage,
     retryLastMessage,
   };

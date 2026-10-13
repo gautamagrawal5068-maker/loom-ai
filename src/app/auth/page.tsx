@@ -176,7 +176,10 @@ function AuthContent() {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col justify-center items-center px-4 py-12 bg-[#191817] text-[#ecebe6] relative overflow-hidden font-sans">
+    <div className="min-h-dvh flex flex-col justify-center items-center px-4 py-12 bg-[#090a0f] text-[#f8fafc] relative overflow-hidden font-sans">
+      {/* Background ambient glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+
       <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8 flex flex-col items-center">
@@ -186,26 +189,26 @@ function AuthContent() {
           <h1 className="text-2xl font-bold tracking-tight text-white">
             {mode === 'signin' ? 'Welcome back to LOOM' : 'Create your LOOM account'}
           </h1>
-          <p className="text-xs text-zinc-400 mt-1.5 max-w-xs">
+          <p className="text-xs text-slate-400 mt-1.5 max-w-xs">
             Your emails, written the way you would write them.
           </p>
         </div>
 
         {/* Configuration Notice */}
         {!supabaseConfigured && (
-          <div className="mb-6 p-4 rounded-2xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs leading-relaxed flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+          <div className="mb-6 p-4 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 text-cyan-300 text-xs leading-relaxed flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-cyan-400 mt-0.5" />
             <div>
               <span className="font-semibold block mb-0.5">Supabase Configuration Required</span>
-              Add your credentials to <code className="bg-amber-900/40 px-1 py-0.5 rounded text-amber-200 font-mono">.env.local</code> to activate live authentication.
+              Add your credentials to <code className="bg-cyan-900/40 px-1 py-0.5 rounded text-cyan-200 font-mono">.env.local</code> to activate live authentication.
             </div>
           </div>
         )}
 
         {/* Auth Card */}
-        <div className="rounded-2xl border border-[#343230] bg-[#23211f] p-6 sm:p-8 shadow-xl">
+        <div className="rounded-2xl border border-white/[0.08] bg-[#0d0f17] p-6 sm:p-8 shadow-2xl shadow-black/60">
           {/* Mode Switcher Tabs */}
-          <div className="grid grid-cols-2 p-1 rounded-xl bg-[#1a1917] border border-[#2f2d2a] mb-6">
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-[#121520] border border-white/[0.06] mb-6">
             <button
               type="button"
               onClick={() => {
@@ -215,8 +218,8 @@ function AuthContent() {
               }}
               className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 mode === 'signin'
-                  ? 'bg-[#2f2d2a] text-[#edebe6] shadow-xs'
-                  : 'text-[#9e9a93] hover:text-[#edebe6]'
+                  ? 'bg-white/[0.08] text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Sign In
@@ -230,8 +233,8 @@ function AuthContent() {
               }}
               className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 mode === 'signup'
-                  ? 'bg-[#2f2d2a] text-[#edebe6] shadow-xs'
-                  : 'text-[#9e9a93] hover:text-[#edebe6]'
+                  ? 'bg-white/[0.08] text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Create Account
@@ -258,10 +261,10 @@ function AuthContent() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isGoogleLoading || isLoading}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-[#383633] bg-[#1a1917] hover:bg-[#282624] text-[#edebe6] text-xs font-medium transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-white/[0.08] bg-[#121520] hover:bg-[#181b28] text-slate-200 text-xs font-medium transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isGoogleLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[#cc785c]" />
+              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
             ) : (
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
@@ -287,16 +290,16 @@ function AuthContent() {
 
           {/* Divider */}
           <div className="flex items-center my-5">
-            <div className="flex-1 border-t border-[#343230]" />
-            <span className="px-3 text-[11px] text-[#9e9a93] font-mono">or email</span>
-            <div className="flex-1 border-t border-[#343230]" />
+            <div className="flex-1 border-t border-white/[0.08]" />
+            <span className="px-3 text-[11px] text-slate-500 font-mono">or email</span>
+            <div className="flex-1 border-t border-white/[0.08]" />
           </div>
 
           {/* Form */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {mode === 'signup' && (
               <div>
-                <label className="block text-xs font-medium text-[#c4c0b6] mb-1.5">
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
                   Full Name
                 </label>
                 <input
@@ -304,41 +307,41 @@ function AuthContent() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Gautam Agrawal"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-xs placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-xs placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all outline-none"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-medium text-[#c4c0b6] mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-[#7e7a73] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="gautam@company.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-xs placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-xs placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#c4c0b6] mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Password
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-[#7e7a73] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#383633] bg-[#1a1917] text-[#edebe6] text-xs placeholder:text-[#6e6a64] focus:border-[#cc785c] focus:ring-1 focus:ring-[#cc785c]/30 transition-all"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-xs placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all outline-none"
                 />
               </div>
             </div>
@@ -346,7 +349,7 @@ function AuthContent() {
             <button
               type="submit"
               disabled={isLoading || isGoogleLoading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#cc785c] hover:bg-[#b8684e] text-white text-xs font-semibold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white text-xs font-semibold transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -358,13 +361,24 @@ function AuthContent() {
               )}
             </button>
           </form>
+
+          {/* Instant Guest / Local Access */}
+          <div className="mt-5 pt-4 border-t border-white/[0.08]">
+            <Link
+              href="/app"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-white/[0.08] bg-[#121520] hover:bg-[#181b28] text-slate-200 text-xs font-medium transition-all shadow-xs"
+            >
+              <span>Continue as Guest / Enter Workspace</span>
+              <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
+            </Link>
+          </div>
         </div>
 
         {/* Back Link */}
         <div className="text-center mt-6">
           <Link
             href="/"
-            className="text-xs text-[#9e9a93] hover:text-[#edebe6] transition-colors inline-flex items-center gap-1 font-mono"
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1 font-mono"
           >
             ← Back to LOOM AI
           </Link>
@@ -378,8 +392,8 @@ export default function AuthPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-dvh flex items-center justify-center bg-[#191817]">
-          <Loader2 className="w-6 h-6 animate-spin text-[#cc785c]" />
+        <div className="min-h-dvh flex items-center justify-center bg-[#090a0f]">
+          <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
         </div>
       }
     >

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { humanizeEmailDraft } from '@/lib/humanizer';
+import { calculateEstimatedCost } from '@/lib/pricing';
+import { detectOffContext } from '@/lib/contextDetection';
 
 export async function POST(request: NextRequest) {
+  const requestStartTime = Date.now();
   try {
     // 1. Read MODEL_API_URL, MODEL_API_KEY, and MODEL_NAME from environment variables
     const apiUrl = process.env.MODEL_API_URL;
@@ -21,6 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. User session verification if Supabase configured
+    let verifiedUserId: string | null = null;
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       try {
         const supabase = await createClient();
@@ -28,7 +32,9 @@ export async function POST(request: NextRequest) {
           data: { user },
         } = await supabase.auth.getUser();
 
-        if (process.env.NODE_ENV === 'production' && !user) {
+        if (user) {
+          verifiedUserId = user.id;
+        } else if (process.env.NODE_ENV === 'production') {
           return NextResponse.json(
             { error: 'Unauthorized: Please sign in to draft emails with LOOM AI.' },
             { status: 401 }
@@ -41,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Parse request body
     const body = await request.json();
-    const { messages, styleSample, tone, modelTier } = body;
+    const { messages, styleSample, tone, modelTier, context, writingProfile } = body;
 
     // Model Tier Mapping: Silk (fast), Weave (balanced), Tapestry (heavyweight reasoning)
     const MODEL_TIERS: Record<string, string> = {
@@ -62,33 +68,91 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Construct tailored system prompt
-    let systemPrompt = `You are LOOM AI, an intelligent email writing assistant. Your mission is: "Your emails, written the way you would write them."
+    let systemPrompt = `You are LOOM AI, an exceptionally thoughtful, natural, and human-like email writing partner. Your mission is: "Your emails, written the way you would write them."
 
-Your core capabilities:
-- Write natural, personalized emails that feel human and bespoke.
+Your core qualities:
+- Write with effortless human authenticity, warmth, and natural cadence. Avoid stiff corporate jargon, robotic filler, or algorithmic formulas.
 - Support tones: Formal, Friendly, Assertive, Apologetic, Concise, and Persuasive.
-- Learn from writing examples provided by the user to authentically mirror their style, vocabulary, sentence length, and cadence.
-- Support multi-turn revisions: when the user asks to refine or tweak an email (e.g. "make it more direct", "soften the ask", "add a P.S."), keep the context and produce an updated draft.
+- Adapt seamlessly to conversational flow and multi-turn revisions.
 
-Formatting & Conversational Guidelines:
-1. CASUAL GREETINGS & GENERAL QUESTIONS:
-   If the user says a greeting (e.g. "hi", "hello", "hey", "good morning") or asks a general conversational question (e.g. "what can you do?", "how does this work?"), RESPOND CONVERSATIONALLY and warmly like Claude or ChatGPT.
-   DO NOT create a fake email with "Subject:" when the user simply said "hi" or asked a question. Greet them naturally, acknowledge their name if provided, and ask what email or message they would like to draft or refine today.
+Natural Conversational Guidance:
+1. CASUAL GREETINGS & CHAT:
+   When the user greets you or chats conversationally ("hi", "how are you", "what can you do"), respond warmly, casually, and naturally like Claude or ChatGPT. Do NOT output a fake email draft for casual greetings.
 
 2. EMAIL DRAFTS & REVISIONS:
-   ONLY when the user requests, describes, or asks to write, revise, answer, or polish an email, format your response as:
-   Subject: [Compelling, context-appropriate subject line]
+   When the user asks to write, draft, reply to, or polish an email, provide an authentic, ready-to-send draft:
+   Subject: [Compelling, natural subject line]
 
-   [Email body, with greeting, paragraphs, and sign-off]`;
+   [Email body with authentic greeting, natural phrasing, and sign-off]
 
-    if (tone) {
-      systemPrompt += `\n\nActive Requested Tone: "${tone}". Ensure the email draft adopts a ${tone.toLowerCase()} tone without sounding artificial or exaggerated.`;
+3. OFF-TOPIC TASKS (MATH, CODE, HOMEWORK):
+   LOOM AI is specialized for email drafting and correspondence. If the user asks you to solve math problems, write code, or perform tasks unrelated to emails, provide a concise solution followed by a gentle note:
+   "(LOOM AI is specialized for email communication. Off-context queries consume additional tokens)."`;
+
+    // Active Tone Override or Fallback to Profile Default Tone
+    const effectiveTone = tone || writingProfile?.defaultTone;
+    if (effectiveTone) {
+      systemPrompt += `\n\nActive Requested Tone: "${effectiveTone}". Ensure the email draft adopts a ${effectiveTone.toLowerCase()} tone without sounding artificial or exaggerated.`;
     }
 
-    if (styleSample && typeof styleSample === 'string' && styleSample.trim().length > 0) {
+    // Additional background context if provided by a template or reply modal
+    if (context && typeof context === 'string' && context.trim().length > 0) {
+      const sanitizedContext = context.trim().slice(0, 3000);
+      systemPrompt += `\n\nAdditional background details:\n"""\n${sanitizedContext}\n"""`;
+    }
+
+    // Personal Writing Profile Integration
+    if (writingProfile && typeof writingProfile === 'object') {
+      const profileRules: string[] = [];
+
+      if (writingProfile.preferredLength) {
+        const lenMap: Record<string, string> = {
+          concise: 'Draft length: Concise and punchy (1-2 tight paragraphs).',
+          balanced: 'Draft length: Balanced (2-3 well-structured paragraphs).',
+          thorough: 'Draft length: In-depth and comprehensive.',
+        };
+        if (lenMap[writingProfile.preferredLength]) {
+          profileRules.push(lenMap[writingProfile.preferredLength]);
+        }
+      }
+
+      if (writingProfile.writingStyle) {
+        const styleMap: Record<string, string> = {
+          professional: 'Demeanor: Polished, respectful, executive professional.',
+          warm: 'Demeanor: Warm, collaborative, friendly, and approachable.',
+          direct: 'Demeanor: Direct, concise, action-oriented with minimal filler.',
+          academic: 'Demeanor: Articulate, thoughtful, and structured.',
+        };
+        if (styleMap[writingProfile.writingStyle]) {
+          profileRules.push(styleMap[writingProfile.writingStyle]);
+        }
+      }
+
+      if (writingProfile.preferredGreeting && writingProfile.preferredGreeting.trim()) {
+        profileRules.push(`Preferred greeting: "${writingProfile.preferredGreeting.trim()}"`);
+      }
+
+      if (writingProfile.preferredSignoff && writingProfile.preferredSignoff.trim()) {
+        profileRules.push(`Preferred sign-off: "${writingProfile.preferredSignoff.trim()}"`);
+      }
+
+      if (writingProfile.preferredLanguage && writingProfile.preferredLanguage.trim() && writingProfile.preferredLanguage !== 'English (US)') {
+        profileRules.push(`Target language: Write the email in ${writingProfile.preferredLanguage.trim()}.`);
+      }
+
+      if (profileRules.length > 0) {
+        systemPrompt += `\n\nUser's Personal Profile Preferences:
+${profileRules.map((r) => `- ${r}`).join('\n')}
+(CRITICAL PRECEDENCE RULE: Explicit instructions in the user's current prompt ALWAYS take precedence over these saved profile preferences).`;
+      }
+    }
+
+    // Writing Style Sample (Direct prop or Profile sample)
+    const effectiveSample = (styleSample || writingProfile?.styleSample || '').trim();
+    if (effectiveSample.length > 0) {
       systemPrompt += `\n\nUser's Personal Writing Style Sample:
 """
-${styleSample.trim()}
+${effectiveSample}
 """
 CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typical sentence length, vocabulary, formality, phrasing habits, and greeting/sign-off conventions so the draft sounds indistinguishable from something they wrote themselves.`;
     }
@@ -291,10 +355,77 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
     // Casual pings / greetings only cost 1 credit, not full heavyweight draft price
     const creditsCost = isGreetingOrCasual ? 1 : MODEL_CREDIT_COSTS[selectedTier] || 3;
 
+    // Natural conversation token accounting:
+    // Usage tokens are weighed by:
+    // 1. Work done (output draft length / tokens)
+    // 2. Model reasoning strength (Silk: 1.0x, Weave: 1.6x, Tapestry: 3.0x deep reasoning)
+    // 3. Time taken during generation (server elapsed duration)
+    // 4. Off-context surcharge (+3500 tokens if user asks non-email tasks like maths/code)
+    const elapsedDurationMs = Date.now() - requestStartTime;
+    const elapsedSeconds = Math.max(0.1, elapsedDurationMs / 1000);
+
+    const offContextCheck = detectOffContext(lastUserMessage);
+    const isOffContext = offContextCheck.isOffContext;
+
+    const naturalPromptTokens = Math.max(5, Math.ceil((lastUserMessage.length || 0) / 3.8));
+    const naturalOutputTokens = Math.max(15, Math.ceil((finalContent.length || extractedContent.length || 0) / 3.8));
+
+    // Reasoning strength multipliers
+    const TIER_MULTIPLIERS: Record<string, number> = {
+      silk: 1.0,
+      weave: 1.4,
+      tapestry: 2.0,
+    };
+    const tierMultiplier = TIER_MULTIPLIERS[selectedTier] || 1.4;
+
+    // Time effort tokens (~20 tokens per second of generation time)
+    const timeEffortTokens = Math.round(elapsedSeconds * 20);
+
+    // Off-context surcharge (maths, code, homework queries)
+    const offContextSurcharge = isOffContext ? 2500 : 0;
+
+    // Total weighed tokens deducted on reply: prompt + completion * tier + compute time
+    const promptTokens = naturalPromptTokens;
+    const candidatesTokens = naturalOutputTokens;
+    const baseWeightedTokens = promptTokens + Math.round(candidatesTokens * tierMultiplier) + timeEffortTokens;
+    const totalTokens = Math.max(120, baseWeightedTokens + offContextSurcharge);
+    const isProviderReported = Boolean(data?.usageMetadata || data?.usage);
+    const estimatedCostUsd = calculateEstimatedCost(activeModel, promptTokens, candidatesTokens);
+
+    // Persist server-side usage log in Supabase if table is present
+    if (verifiedUserId && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      try {
+        const supabase = await createClient();
+        await supabase.from('usage_logs').insert({
+          user_id: verifiedUserId,
+          model: activeModel,
+          model_tier: selectedTier,
+          input_tokens: promptTokens,
+          output_tokens: candidatesTokens,
+          total_tokens: totalTokens,
+          estimated_cost_usd: estimatedCostUsd,
+          success: true,
+        });
+      } catch {
+        // Table might not exist yet; graceful fallback
+      }
+    }
+
     return NextResponse.json({
       content: finalContent,
       modelUsed: selectedTier,
       creditsCost,
+      usage: {
+        promptTokens,
+        candidatesTokens,
+        totalTokens,
+        timeTakenSec: Number(elapsedSeconds.toFixed(2)),
+        modelTier: selectedTier,
+        isOffContext,
+        estimatedCostUsd,
+        model: activeModel,
+        providerReported: isProviderReported,
+      },
     });
   } catch (error: unknown) {
     const err = error as Error & { name?: string; message?: string };

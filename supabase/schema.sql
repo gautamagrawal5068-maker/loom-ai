@@ -36,6 +36,20 @@ create table if not exists public.messages (
   created_at timestamptz default now() not null
 );
 
+-- 4. Usage Logs Table (Server-verified token accounting)
+create table if not exists public.usage_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users on delete cascade not null,
+  model text not null,
+  model_tier text not null,
+  input_tokens integer not null default 0,
+  output_tokens integer not null default 0,
+  total_tokens integer not null default 0,
+  estimated_cost_usd numeric(10, 6) not null default 0,
+  success boolean not null default true,
+  created_at timestamptz default now() not null
+);
+
 -- ==============================================================================
 -- Row Level Security (RLS) Policies
 -- ==============================================================================
@@ -43,6 +57,7 @@ create table if not exists public.messages (
 alter table public.profiles enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
+alter table public.usage_logs enable row level security;
 
 -- Profiles Policies
 create policy "Users can view their own profile"
@@ -104,6 +119,15 @@ create policy "Users can delete messages from their own conversations"
       and public.conversations.user_id = auth.uid()
     )
   );
+
+-- Usage Logs Policies
+create policy "Users can view their own usage logs"
+  on public.usage_logs for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own usage logs"
+  on public.usage_logs for insert
+  with check (auth.uid() = user_id);
 
 -- ==============================================================================
 -- Triggers: Auto-create Profile on Sign Up
