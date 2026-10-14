@@ -142,7 +142,7 @@ export function TemplatesModal({
                   <button
                     type="button"
                     onClick={() => handleUseTemplate(template)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181d2d] hover:bg-gradient-to-r hover:from-cyan-400 hover:to-purple-500 text-[#f8fafc] hover:text-white hover:font-bold border border-white/[0.08] hover:border-transparent text-xs font-mono font-medium transition-all cursor-pointer shadow-xs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181d2d] hover:bg-cyan-500/20 text-[#f8fafc] hover:text-cyan-300 border border-white/[0.08] hover:border-cyan-500/40 text-xs font-sans font-medium transition-all cursor-pointer shadow-xs"
                   >
                     <span>Use Template</span>
                     <ArrowRight className="w-3 h-3" />

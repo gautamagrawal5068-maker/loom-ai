@@ -322,7 +322,7 @@ export function StyleModal({
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 hover:opacity-95 text-white px-4 py-2 text-xs font-mono font-bold transition-all cursor-pointer shadow-md"
+              className="flex items-center gap-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 px-4 py-2 text-xs font-sans font-semibold transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.25)]"
             >
               {savedSuccess ? (
                 <>

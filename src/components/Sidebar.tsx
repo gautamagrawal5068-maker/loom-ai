@@ -313,7 +313,7 @@ export function Sidebar({
         {/* User Profile & Sign Out Bar */}
         <div className="p-3 border-t border-white/[0.08] bg-[#090a0f] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 via-purple-600 to-pink-500 flex items-center justify-center font-mono font-bold text-xs text-white shrink-0 shadow-xs">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-sans font-semibold text-xs shrink-0">
               {profile?.preferred_name
                 ? profile.preferred_name.charAt(0).toUpperCase()
                 : 'U'}

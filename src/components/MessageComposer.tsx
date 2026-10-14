@@ -402,7 +402,7 @@ export function MessageComposer({
                     ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed border border-white/[0.04]'
                     : isEmpty || isLoading
                     ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 hover:opacity-95 text-white font-bold shadow-lg shadow-cyan-500/25 cursor-pointer hover:scale-[1.03]'
+                    : 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-bold shadow-[0_0_15px_rgba(34,211,238,0.3)] cursor-pointer hover:scale-[1.03]'
                 }`}
                 aria-label="Send draft request"
               >

@@ -247,7 +247,11 @@ ${receivedEmail.trim()}
                     type="button"
                     onClick={handleRunSummarize}
                     disabled={!emailToSummarize.trim() || isSummarizing}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 hover:opacity-95 disabled:from-zinc-800 disabled:to-zinc-800 text-white disabled:text-zinc-600 text-xs font-mono font-bold transition-colors cursor-pointer shadow-md"
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-sans font-semibold transition-all ${
+                      !emailToSummarize.trim() || isSummarizing
+                        ? 'bg-zinc-800/80 text-zinc-500 cursor-not-allowed border border-white/[0.04]'
+                        : 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 shadow-[0_0_15px_rgba(34,211,238,0.25)] cursor-pointer'
+                    }`}
                   >
                     {isSummarizing ? (
                       <>
@@ -348,7 +352,7 @@ ${receivedEmail.trim()}
                     <button
                       type="button"
                       onClick={handleReplyFromSummary}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 hover:opacity-95 text-white font-bold border border-cyan-500/40 text-xs font-mono transition-all cursor-pointer shadow-md"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-sans font-semibold text-xs transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.25)]"
                     >
                       <Reply className="w-3.5 h-3.5" />
                       <span>Generate Reply from this Summary</span>
@@ -366,7 +370,7 @@ ${receivedEmail.trim()}
           <div className="p-3.5 border-t border-white/[0.08] bg-[#090a0f] flex items-center justify-between">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-xl text-xs font-mono text-zinc-400 hover:text-[#f8fafc] transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl text-xs font-sans text-zinc-400 hover:text-[#f8fafc] transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -374,7 +378,11 @@ ${receivedEmail.trim()}
               type="button"
               onClick={handleCreateReply}
               disabled={!receivedEmail.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 hover:opacity-95 disabled:from-zinc-800 disabled:to-zinc-800 text-white disabled:text-zinc-600 text-xs font-mono font-bold transition-all cursor-pointer shadow-md"
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-sans font-semibold transition-all ${
+                !receivedEmail.trim()
+                  ? 'bg-zinc-800/80 text-zinc-500 cursor-not-allowed border border-white/[0.04]'
+                  : 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 shadow-[0_0_15px_rgba(34,211,238,0.25)] cursor-pointer'
+              }`}
             >
               <span>Draft Response</span>
               <ArrowRight className="w-3.5 h-3.5" />
