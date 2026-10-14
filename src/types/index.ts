@@ -91,6 +91,9 @@ export interface WritingProfile {
   preferredGreeting: string;
   preferredSignoff: string;
   preferredLanguage: string;
+  userCategory?: UserCategory | null;
+  emailPurpose?: EmailPurpose | null;
+  preferredStyle?: PreferredStyle | null;
 }
 
 export interface TokenUsage {
@@ -137,6 +140,9 @@ export interface ChatRequest {
   modelTier?: ModelTier;
   context?: string | null;
   writingProfile?: WritingProfile | null;
+  userCategory?: UserCategory | null;
+  emailPurpose?: EmailPurpose | null;
+  preferredStyle?: PreferredStyle | null;
 }
 
 export interface ChatResponse {

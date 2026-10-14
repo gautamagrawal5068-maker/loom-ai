@@ -110,6 +110,16 @@ create policy "Users can insert messages into their own conversations"
     )
   );
 
+create policy "Users can update messages in their own conversations"
+  on public.messages for update
+  using (
+    exists (
+      select 1 from public.conversations
+      where public.conversations.id = public.messages.conversation_id
+      and public.conversations.user_id = auth.uid()
+    )
+  );
+
 create policy "Users can delete messages from their own conversations"
   on public.messages for delete
   using (

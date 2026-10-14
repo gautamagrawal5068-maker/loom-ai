@@ -30,24 +30,38 @@ export async function POST(request: NextRequest) {
         const supabase = await createClient();
         const {
           data: { user },
+          error: authError,
         } = await supabase.auth.getUser();
 
-        if (user) {
-          verifiedUserId = user.id;
-        } else if (process.env.NODE_ENV === 'production') {
+        if (authError || !user) {
           return NextResponse.json(
             { error: 'Unauthorized: Please sign in to draft emails with LOOM AI.' },
             { status: 401 }
           );
         }
+        verifiedUserId = user.id;
       } catch (authErr) {
-        console.warn('Session verification warning:', authErr);
+        console.error('Session verification error:', authErr);
+        return NextResponse.json(
+          { error: 'Unauthorized: Session verification failed.' },
+          { status: 401 }
+        );
       }
     }
 
     // 4. Parse request body
     const body = await request.json();
-    const { messages, styleSample, tone, modelTier, context, writingProfile } = body;
+    const {
+      messages,
+      styleSample,
+      tone,
+      modelTier,
+      context,
+      writingProfile,
+      userCategory,
+      emailPurpose,
+      preferredStyle,
+    } = body;
 
     // Model Tier Mapping: Silk (fast), Weave (balanced), Tapestry (heavyweight reasoning)
     const MODEL_TIERS: Record<string, string> = {
@@ -140,11 +154,33 @@ Natural Conversational Guidance:
         profileRules.push(`Target language: Write the email in ${writingProfile.preferredLanguage.trim()}.`);
       }
 
+      const authorCategory = writingProfile.userCategory || userCategory;
+      if (authorCategory) {
+        profileRules.push(`Author Role/Background: ${authorCategory}. Frame context, perspective, and phrasing naturally as a ${authorCategory.toLowerCase()}.`);
+      }
+
+      const primaryPurpose = writingProfile.emailPurpose || emailPurpose;
+      if (primaryPurpose) {
+        profileRules.push(`Primary Email Domain: ${primaryPurpose}. Optimize drafts and conventions for ${primaryPurpose.toLowerCase()} correspondence.`);
+      }
+
+      const stylePref = writingProfile.preferredStyle || preferredStyle;
+      if (stylePref) {
+        profileRules.push(`Baseline Voice/Style: ${stylePref}.`);
+      }
+
       if (profileRules.length > 0) {
         systemPrompt += `\n\nUser's Personal Profile Preferences:
 ${profileRules.map((r) => `- ${r}`).join('\n')}
 (CRITICAL PRECEDENCE RULE: Explicit instructions in the user's current prompt ALWAYS take precedence over these saved profile preferences).`;
       }
+    } else if (userCategory || emailPurpose || preferredStyle) {
+      const profileRules: string[] = [];
+      if (userCategory) profileRules.push(`Author Role/Background: ${userCategory}.`);
+      if (emailPurpose) profileRules.push(`Primary Email Domain: ${emailPurpose}.`);
+      if (preferredStyle) profileRules.push(`Baseline Voice/Style: ${preferredStyle}.`);
+      systemPrompt += `\n\nUser's Onboarding Profile:
+${profileRules.map((r) => `- ${r}`).join('\n')}`;
     }
 
     // Writing Style Sample (Direct prop or Profile sample)
@@ -178,7 +214,9 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
     }
 
     let response: Response | undefined;
+    let actualModelUsed = activeModel;
     let lastErrorText = '';
+    let isTimeout = false;
 
     try {
       for (const modelToTry of candidateModels) {
@@ -221,6 +259,7 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
 
           if (res.ok) {
             response = res;
+            actualModelUsed = modelToTry;
             break;
           }
 
@@ -233,13 +272,26 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
 
           // Other errors: abort fallback loop
           response = res;
+          actualModelUsed = modelToTry;
           break;
-        } catch (fetchErr) {
+        } catch (fetchErr: unknown) {
+          const err = fetchErr as Error & { name?: string };
+          if (err.name === 'AbortError' || controller.signal.aborted) {
+            isTimeout = true;
+            break;
+          }
           console.warn(`Fetch error with model ${modelToTry}:`, fetchErr);
         }
       }
     } finally {
       clearTimeout(timeoutId);
+    }
+
+    if (isTimeout || controller.signal.aborted) {
+      return NextResponse.json(
+        { error: 'Model request timed out after 35 seconds. Please try again.' },
+        { status: 504 }
+      );
     }
 
     // 8. Handle non-2xx responses or failures across all candidates
@@ -367,30 +419,47 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
     const offContextCheck = detectOffContext(lastUserMessage);
     const isOffContext = offContextCheck.isOffContext;
 
-    const naturalPromptTokens = Math.max(5, Math.ceil((lastUserMessage.length || 0) / 3.8));
-    const naturalOutputTokens = Math.max(15, Math.ceil((finalContent.length || extractedContent.length || 0) / 3.8));
+    // Check if provider reported exact token metrics
+    const providerPrompt = data?.usageMetadata?.promptTokenCount ?? data?.usage?.prompt_tokens;
+    const providerCandidates = data?.usageMetadata?.candidatesTokenCount ?? data?.usage?.completion_tokens;
+    const providerTotal = data?.usageMetadata?.totalTokenCount ?? data?.usage?.total_tokens;
+    const isProviderReported = typeof providerPrompt === 'number' && typeof providerCandidates === 'number';
 
-    // Reasoning strength multipliers
-    const TIER_MULTIPLIERS: Record<string, number> = {
-      silk: 1.0,
-      weave: 1.4,
-      tapestry: 2.0,
-    };
-    const tierMultiplier = TIER_MULTIPLIERS[selectedTier] || 1.4;
+    let promptTokens: number;
+    let candidatesTokens: number;
+    let totalTokens: number;
 
-    // Time effort tokens (~20 tokens per second of generation time)
-    const timeEffortTokens = Math.round(elapsedSeconds * 20);
+    if (isProviderReported) {
+      promptTokens = providerPrompt;
+      candidatesTokens = providerCandidates;
+      totalTokens = providerTotal ?? (promptTokens + candidatesTokens);
+    } else {
+      // Accurate fallback estimation:
+      // Count total context sent: system prompt (guidelines + persona + profile) + entire conversation messages
+      const fullConversationText = (messages || []).map((m: { content: string }) => m.content || '').join('\n');
+      const totalInputText = `${systemPrompt}\n${fullConversationText}`;
+      promptTokens = Math.max(15, Math.ceil(totalInputText.length / 3.8));
+      candidatesTokens = Math.max(15, Math.ceil((finalContent.length || extractedContent.length || 0) / 3.8));
 
-    // Off-context surcharge (maths, code, homework queries)
-    const offContextSurcharge = isOffContext ? 2500 : 0;
+      // Reasoning strength multipliers
+      const TIER_MULTIPLIERS: Record<string, number> = {
+        silk: 1.0,
+        weave: 1.4,
+        tapestry: 2.0,
+      };
+      const tierMultiplier = TIER_MULTIPLIERS[selectedTier] || 1.4;
 
-    // Total weighed tokens deducted on reply: prompt + completion * tier + compute time
-    const promptTokens = naturalPromptTokens;
-    const candidatesTokens = naturalOutputTokens;
-    const baseWeightedTokens = promptTokens + Math.round(candidatesTokens * tierMultiplier) + timeEffortTokens;
-    const totalTokens = Math.max(120, baseWeightedTokens + offContextSurcharge);
-    const isProviderReported = Boolean(data?.usageMetadata || data?.usage);
-    const estimatedCostUsd = calculateEstimatedCost(activeModel, promptTokens, candidatesTokens);
+      // Time effort tokens (~20 tokens per second of generation time)
+      const timeEffortTokens = Math.round(elapsedSeconds * 20);
+
+      // Off-context surcharge (maths, code, homework queries)
+      const offContextSurcharge = isOffContext ? 2500 : 0;
+
+      const baseWeightedTokens = promptTokens + Math.round(candidatesTokens * tierMultiplier) + timeEffortTokens;
+      totalTokens = Math.max(120, baseWeightedTokens + offContextSurcharge);
+    }
+
+    const estimatedCostUsd = calculateEstimatedCost(actualModelUsed, promptTokens, candidatesTokens);
 
     // Persist server-side usage log in Supabase if table is present
     if (verifiedUserId && process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -398,7 +467,7 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
         const supabase = await createClient();
         await supabase.from('usage_logs').insert({
           user_id: verifiedUserId,
-          model: activeModel,
+          model: actualModelUsed,
           model_tier: selectedTier,
           input_tokens: promptTokens,
           output_tokens: candidatesTokens,
@@ -423,7 +492,7 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
         modelTier: selectedTier,
         isOffContext,
         estimatedCostUsd,
-        model: activeModel,
+        model: actualModelUsed,
         providerReported: isProviderReported,
       },
     });

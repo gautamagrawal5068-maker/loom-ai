@@ -361,17 +361,6 @@ function AuthContent() {
               )}
             </button>
           </form>
-
-          {/* Instant Guest / Local Access */}
-          <div className="mt-5 pt-4 border-t border-white/[0.08]">
-            <Link
-              href="/app"
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-white/[0.08] bg-[#121520] hover:bg-[#181b28] text-slate-200 text-xs font-medium transition-all shadow-xs"
-            >
-              <span>Continue as Guest / Enter Workspace</span>
-              <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
-            </Link>
-          </div>
         </div>
 
         {/* Back Link */}

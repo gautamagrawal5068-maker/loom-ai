@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { UserCategory, EmailPurpose, PreferredStyle } from '@/types';
+import { UserCategory, EmailPurpose, PreferredStyle, WritingProfile } from '@/types';
+import { loadWritingProfile, saveWritingProfile } from '@/lib/storage';
 import {
   ArrowRight,
   ArrowLeft,
@@ -291,21 +292,74 @@ export default function OnboardingPage() {
       localStorage.setItem('loom-ai-style-sample', styleSample.trim());
     }
 
+    // Save onboarding preferences directly into the personal writing profile
+    try {
+      const currentProfile = loadWritingProfile();
+      const styleMap: Record<PreferredStyle, WritingProfile['writingStyle']> = {
+        Professional: 'professional',
+        Friendly: 'warm',
+        Direct: 'direct',
+        Warm: 'warm',
+        Adaptable: 'professional',
+      };
+      const updatedProfile: WritingProfile = {
+        ...currentProfile,
+        styleSample: styleSample.trim() || currentProfile.styleSample,
+        userCategory: finalData.user_category,
+        emailPurpose: finalData.email_purpose,
+        preferredStyle: finalData.preferred_style,
+        writingStyle: finalData.preferred_style ? styleMap[finalData.preferred_style] || currentProfile.writingStyle : currentProfile.writingStyle,
+      };
+      saveWritingProfile(updatedProfile);
+    } catch (err) {
+      console.warn('Failed to save writing profile during onboarding finish:', err);
+    }
+
     setIsSaving(false);
     router.replace('/app');
   };
 
   const handleSkipToWorkspace = async () => {
     setIsSaving(true);
-    await saveProgress({
+    const finalData = {
       onboarding_completed: true,
       preferred_name: preferredName.trim() || 'User',
+      user_category: userCategory || 'Professional',
       preferred_style: preferredStyle || 'Professional',
       email_purpose: emailPurpose || 'Work',
-    });
+      style_sample: styleSample.trim(),
+    };
+    await saveProgress(finalData);
     localStorage.setItem('loom_onboarding_completed', 'true');
     document.cookie =
       'loom_onboarding_completed=true; path=/; max-age=31536000; SameSite=Lax';
+
+    if (styleSample.trim()) {
+      localStorage.setItem('loom-ai-style-sample', styleSample.trim());
+    }
+
+    try {
+      const currentProfile = loadWritingProfile();
+      const styleMap: Record<PreferredStyle, WritingProfile['writingStyle']> = {
+        Professional: 'professional',
+        Friendly: 'warm',
+        Direct: 'direct',
+        Warm: 'warm',
+        Adaptable: 'professional',
+      };
+      const updatedProfile: WritingProfile = {
+        ...currentProfile,
+        styleSample: styleSample.trim() || currentProfile.styleSample,
+        userCategory: finalData.user_category,
+        emailPurpose: finalData.email_purpose,
+        preferredStyle: finalData.preferred_style,
+        writingStyle: finalData.preferred_style ? styleMap[finalData.preferred_style] || currentProfile.writingStyle : currentProfile.writingStyle,
+      };
+      saveWritingProfile(updatedProfile);
+    } catch (err) {
+      console.warn('Failed to save writing profile during skip:', err);
+    }
+
     setIsSaving(false);
     router.replace('/app');
   };

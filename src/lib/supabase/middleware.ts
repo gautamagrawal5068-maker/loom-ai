@@ -38,8 +38,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Protected routes: /onboarding requires authentication
-  if (!user && pathname.startsWith('/onboarding')) {
+  // Protected routes: /app and /onboarding require authentication
+  if (!user && (pathname.startsWith('/app') || pathname.startsWith('/onboarding'))) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth';
     url.searchParams.set('redirectTo', pathname);

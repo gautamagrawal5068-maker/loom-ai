@@ -49,8 +49,24 @@ export async function GET(request: Request) {
         }
 
         if (isCompleted) {
-          const redirectPath = next || '/app';
-          return NextResponse.redirect(`${origin}${redirectPath}`);
+          let safePath = '/app';
+          if (
+            next &&
+            next.startsWith('/') &&
+            !next.startsWith('//') &&
+            !next.startsWith('/\\') &&
+            !next.includes('@')
+          ) {
+            try {
+              const parsed = new URL(next, origin);
+              if (parsed.origin === origin) {
+                safePath = parsed.pathname + parsed.search + parsed.hash;
+              }
+            } catch {
+              safePath = '/app';
+            }
+          }
+          return NextResponse.redirect(`${origin}${safePath}`);
         } else {
           return NextResponse.redirect(`${origin}/onboarding`);
         }

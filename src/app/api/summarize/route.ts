@@ -1,7 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      try {
+        const supabase = await createClient();
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError || !user) {
+          return NextResponse.json(
+            { error: 'Unauthorized: Please sign in to use LOOM AI.' },
+            { status: 401 }
+          );
+        }
+      } catch (authErr) {
+        console.error('Session verification error:', authErr);
+        return NextResponse.json(
+          { error: 'Unauthorized: Session verification failed.' },
+          { status: 401 }
+        );
+      }
+    }
+
     const apiUrl = process.env.MODEL_API_URL;
     const apiKey = process.env.MODEL_API_KEY;
     const modelName = process.env.MODEL_NAME || 'gemini-3.5-flash';

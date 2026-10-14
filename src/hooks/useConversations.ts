@@ -146,10 +146,22 @@ export function useConversations() {
               );
 
               if (profileResult?.data && isMounted) {
-                setProfile(profileResult.data as UserProfile);
-                if (profileResult.data.style_sample) {
-                  setStyleSampleState(profileResult.data.style_sample);
+                const pData = profileResult.data as UserProfile;
+                setProfile(pData);
+                if (pData.style_sample) {
+                  setStyleSampleState(pData.style_sample);
                 }
+                setWritingProfileState((prev) => {
+                  const merged: WritingProfile = {
+                    ...prev,
+                    userCategory: pData.user_category ?? prev.userCategory,
+                    emailPurpose: pData.email_purpose ?? prev.emailPurpose,
+                    preferredStyle: pData.preferred_style ?? prev.preferredStyle,
+                    styleSample: pData.style_sample || prev.styleSample,
+                  };
+                  saveWritingProfile(merged);
+                  return merged;
+                });
               } else if (user && isMounted) {
                 // Synthesize profile from user metadata and local storage
                 const metaName =
@@ -200,6 +212,18 @@ export function useConversations() {
                 if (metaSample) {
                   setStyleSampleState(metaSample);
                 }
+
+                setWritingProfileState((prev) => {
+                  const merged: WritingProfile = {
+                    ...prev,
+                    userCategory: metaCat ?? prev.userCategory,
+                    emailPurpose: metaPurp ?? prev.emailPurpose,
+                    preferredStyle: metaStyle ?? prev.preferredStyle,
+                    styleSample: metaSample || prev.styleSample,
+                  };
+                  saveWritingProfile(merged);
+                  return merged;
+                });
 
                 // If user is inside the workspace, ensure onboarding is marked complete
                 if (typeof document !== 'undefined') {
@@ -259,10 +283,58 @@ export function useConversations() {
                 }));
               }
 
-              // 3. Fallback to local conversations if Supabase has none
+              // 3. Fallback to local conversations and auto-migrate to Supabase if remote is empty
               const localConvs = loadLocalConversations();
               const deletedIds = loadDeletedConversationIds();
-              let allConvs = loadedConvs.length > 0 ? loadedConvs : localConvs;
+              const validLocalConvs = localConvs.filter((c) => !deletedIds.has(c.id));
+
+              if (loadedConvs.length === 0 && validLocalConvs.length > 0 && user?.id) {
+                const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                const migratedList: Conversation[] = [];
+
+                for (const localC of validLocalConvs) {
+                  const targetConvId = UUID_REGEX.test(localC.id) ? localC.id : generateId();
+                  try {
+                    await supabase.from('conversations').insert({
+                      id: targetConvId,
+                      user_id: user.id,
+                      title: localC.title || 'New Conversation',
+                      tone: localC.tone || null,
+                      created_at: new Date(localC.createdAt || Date.now()).toISOString(),
+                      updated_at: new Date(localC.updatedAt || Date.now()).toISOString(),
+                    });
+
+                    const validMessages = (localC.messages || []).map((m) => ({
+                      id: UUID_REGEX.test(m.id) ? m.id : generateId(),
+                      conversation_id: targetConvId,
+                      role: m.role,
+                      content: m.content,
+                      is_error: !!m.isError,
+                      created_at: new Date(m.timestamp || Date.now()).toISOString(),
+                    }));
+
+                    if (validMessages.length > 0) {
+                      await supabase.from('messages').insert(validMessages);
+                    }
+
+                    migratedList.push({
+                      ...localC,
+                      id: targetConvId,
+                      messages: validMessages.map((vm, idx) => ({
+                        ...localC.messages[idx],
+                        id: vm.id,
+                      })),
+                    });
+                  } catch (migErr) {
+                    console.error('Failed to migrate local conversation to Supabase:', migErr);
+                    migratedList.push(localC);
+                  }
+                }
+                saveLocalConversations(migratedList);
+                loadedConvs = migratedList;
+              }
+
+              let allConvs = loadedConvs.length > 0 ? loadedConvs : validLocalConvs;
               allConvs = allConvs.filter((c) => !deletedIds.has(c.id));
 
               if (isMounted) {
@@ -488,9 +560,7 @@ export function useConversations() {
   function setActiveConversation(id: string): void {
     setActiveConversationId(id);
     const target = conversations.find((c) => c.id === id);
-    if (target?.tone) {
-      setActiveToneState(target.tone);
-    }
+    setActiveToneState(target?.tone || null);
   }
 
   async function sendMessage(
@@ -576,6 +646,7 @@ export function useConversations() {
       try {
         const supabase = createClient();
         await supabase.from('messages').insert({
+          id: tempUserMsgId,
           conversation_id: targetConversationId,
           role: 'user',
           content,
@@ -597,6 +668,10 @@ export function useConversations() {
 
     try {
       const effectiveContext = requestContext || currentConv.context || null;
+      const effectiveCategory = writingProfile?.userCategory || profile?.user_category || null;
+      const effectivePurpose = writingProfile?.emailPurpose || profile?.email_purpose || null;
+      const effectiveStyle = writingProfile?.preferredStyle || profile?.preferred_style || null;
+
       const payload: ChatRequest = {
         messages: conversationMessages,
         styleSample: writingProfile?.styleSample || styleSample || profile?.style_sample || null,
@@ -604,6 +679,9 @@ export function useConversations() {
         modelTier,
         context: effectiveContext,
         writingProfile: writingProfile || null,
+        userCategory: effectiveCategory,
+        emailPurpose: effectivePurpose,
+        preferredStyle: effectiveStyle,
       };
 
       const response = await fetch('/api/chat', {
@@ -670,6 +748,7 @@ export function useConversations() {
         try {
           const supabase = createClient();
           await supabase.from('messages').insert({
+            id: tempAssistantId,
             conversation_id: targetConversationId,
             role: 'assistant',
             content: data.content,
@@ -685,8 +764,9 @@ export function useConversations() {
       }
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      const tempErrorId = generateId();
       const errorMessage: Message = {
-        id: generateId(),
+        id: tempErrorId,
         role: 'assistant',
         content: `Error: ${errMessage}`,
         timestamp: Date.now(),
@@ -706,6 +786,7 @@ export function useConversations() {
         try {
           const supabase = createClient();
           await supabase.from('messages').insert({
+            id: tempErrorId,
             conversation_id: targetConversationId,
             role: 'assistant',
             content: `Error: ${errMessage}`,
@@ -729,30 +810,40 @@ export function useConversations() {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.role !== 'assistant' || !lastMessage.isError) return;
 
+    let lastUserIndex = -1;
     let lastUserContent = '';
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
+        lastUserIndex = i;
         lastUserContent = messages[i].content;
         break;
       }
     }
 
-    if (!lastUserContent) return;
+    if (!lastUserContent || lastUserIndex === -1) return;
 
-    // Remove the error message from local state
+    const userMessageToRetry = messages[lastUserIndex];
+
+    // Remove BOTH the error message and the failed user message from local state
     setConversations((prev) =>
       prev.map((c) =>
         c.id === activeConversationId
-          ? { ...c, messages: c.messages.slice(0, -1), updatedAt: Date.now() }
+          ? {
+              ...c,
+              messages: c.messages.filter(
+                (m) => m.id !== lastMessage.id && m.id !== userMessageToRetry.id
+              ),
+              updatedAt: Date.now(),
+            }
           : c
       )
     );
 
-    // Delete error message in Supabase
+    // Delete error message and user message in Supabase
     if (userId && isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        supabase.from('messages').delete().eq('id', lastMessage.id);
+        supabase.from('messages').delete().in('id', [lastMessage.id, userMessageToRetry.id]);
       } catch {
         // ignore
       }
@@ -802,13 +893,17 @@ export function useConversations() {
     async (messageId: string, subject: string, body: string) => {
       const newContent = `Subject: ${subject}\n\n${body}`;
       setConversations((prev) =>
-        prev.map((c) => ({
-          ...c,
-          messages: c.messages.map((m) =>
-            m.id === messageId ? { ...m, content: newContent } : m
-          ),
-          updatedAt: Date.now(),
-        }))
+        prev.map((c) => {
+          const hasMessage = c.messages.some((m) => m.id === messageId);
+          if (!hasMessage) return c;
+          return {
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === messageId ? { ...m, content: newContent } : m
+            ),
+            updatedAt: Date.now(),
+          };
+        })
       );
 
       if (userId && isSupabaseConfigured()) {
@@ -845,6 +940,7 @@ export function useConversations() {
     startNewChat: () => {
       setActiveConversationId(null);
       saveLocalActiveId(null);
+      setActiveToneState(null);
     },
     deleteConversation,
     renameConversation,
