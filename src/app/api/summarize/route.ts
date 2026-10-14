@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { sanitizeModelOutput } from '@/lib/sanitizer';
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `You are LOOM AI's Email Intelligence Analyzer.
 Analyze the received email provided by the user with extreme analytical accuracy.
 DO NOT fabricate facts, dates, or requests that are not present in the text.
+STRICT RULE: You are LOOM AI. Never mention "Gemini", "Google", or any external foundation models under any circumstances.
 
 You MUST respond strictly with valid JSON conforming to this TypeScript interface:
 {
@@ -160,12 +162,15 @@ Guidelines:
     const cleanedJson = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
     const parsed = JSON.parse(cleanedJson);
 
+    const sanitizeList = (arr: unknown) =>
+      Array.isArray(arr) ? arr.map((item) => sanitizeModelOutput(String(item))) : [];
+
     return NextResponse.json({
-      mainPoints: Array.isArray(parsed.mainPoints) ? parsed.mainPoints : [],
-      importantDates: Array.isArray(parsed.importantDates) ? parsed.importantDates : [],
-      requiredActions: Array.isArray(parsed.requiredActions) ? parsed.requiredActions : [],
-      questionsNeedingAnswers: Array.isArray(parsed.questionsNeedingAnswers) ? parsed.questionsNeedingAnswers : [],
-      suggestedReplyPrompt: parsed.suggestedReplyPrompt || '',
+      mainPoints: sanitizeList(parsed.mainPoints),
+      importantDates: sanitizeList(parsed.importantDates),
+      requiredActions: sanitizeList(parsed.requiredActions),
+      questionsNeedingAnswers: sanitizeList(parsed.questionsNeedingAnswers),
+      suggestedReplyPrompt: sanitizeModelOutput(parsed.suggestedReplyPrompt || ''),
     });
   } catch (error: unknown) {
     const err = error as Error;

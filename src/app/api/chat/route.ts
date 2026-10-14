@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { humanizeEmailDraft } from '@/lib/humanizer';
 import { calculateEstimatedCost } from '@/lib/pricing';
 import { detectOffContext } from '@/lib/contextDetection';
+import { sanitizeModelOutput } from '@/lib/sanitizer';
 
 export async function POST(request: NextRequest) {
   const requestStartTime = Date.now();
@@ -121,8 +122,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Model Tier Descriptions
+    const TIER_DESCRIPTIONS: Record<string, string> = {
+      silk: 'Ultra-fast draft generation (~0.8s), lightweight token footprint. Ideal for quick replies, follow-ups, and concise notes.',
+      weave: 'Flagship balanced intelligence, nuanced phrasing, adaptive tone. Ideal for executive correspondence, pitch emails, and everyday professional communications.',
+      tapestry: 'Heavyweight deep reasoning, structural nuance, and neural email humanization. Ideal for high-stakes negotiations, sensitive communications, and complex multi-threaded replies.',
+    };
+
+    const activeTierDescription = TIER_DESCRIPTIONS[selectedTier] || TIER_DESCRIPTIONS.weave;
+
     // 6. Construct tailored system prompt
     let systemPrompt = `You are LOOM AI, an exceptionally thoughtful, natural, and human-like email writing partner. Your mission is: "Your emails, written the way you would write them."
+
+MODEL ARCHITECTURE & KNOWLEDGE:
+You are powered by LOOM AI's proprietary email intelligence architecture.
+LOOM AI features three specialized proprietary model tiers:
+1. Silk (🪡 Light/Fast): Ultra-fast drafting (~0.8s latency), lightweight token footprint (~30-250 tokens). Optimized for quick email replies, follow-ups, brief acknowledgments, and concise notes.
+2. Weave (🧵 Balanced/Flagship): Flagship balanced intelligence, nuanced phrasing, adaptive tone (~70-550 tokens). Optimized for executive correspondence, pitch emails, client proposals, and thoughtful everyday professional emails.
+3. Tapestry (🏛️ Heavyweight/Deep Reasoning & Neural Humanization): Heavyweight deep reasoning, structural nuance, and neural humanization (~150-1400 tokens). Optimized for high-stakes negotiations, sensitive executive matters, complex multi-threaded replies, and emails that must read 100% human-crafted.
+
+CURRENT ACTIVE ENGINE: LOOM AI ${selectedTier.toUpperCase()} (${activeTierDescription}).
+
+STRICT IDENTITY & BRANDING RULES:
+- Your name is LOOM AI. You were built and engineered exclusively by the LOOM AI engineering team.
+- NEVER mention "Gemini", "Google", "DeepMind", "OpenAI", "ChatGPT", "Anthropic", "Claude", or any external foundation models under any circumstances.
+- If asked "Who made you?", "Who trained you?", or "Who built you?", state clearly that you are LOOM AI, developed by the LOOM AI engineering team.
+- If asked "What model are you?", "What models do you have?", or "What is Silk/Weave/Tapestry?", explain LOOM AI's three proprietary tiers (Silk, Weave, and Tapestry) and inform the user that you are currently running on the ${selectedTier.toUpperCase()} engine.
+- If asked "Are you Gemini?" or "Are you ChatGPT?", politely deny and affirm that you are LOOM AI.
 
 Your core qualities:
 - Write with effortless human authenticity, warmth, and natural cadence. Avoid stiff corporate jargon, robotic filler, or algorithmic formulas.
@@ -131,7 +157,7 @@ Your core qualities:
 
 Natural Conversational Guidance:
 1. CASUAL GREETINGS & CHAT:
-   When the user greets you or chats conversationally ("hi", "how are you", "what can you do"), respond warmly, casually, and naturally like Claude or ChatGPT. Do NOT output a fake email draft for casual greetings.
+   When the user greets you or chats conversationally ("hi", "how are you", "what can you do", "who are you", "what models do you have"), respond warmly, casually, and naturally as LOOM AI. Do NOT output a fake email draft for casual greetings or questions about your models.
 
 2. EMAIL DRAFTS & REVISIONS:
    When the user asks to write, draft, reply to, or polish an email, provide an authentic, ready-to-send draft:
@@ -439,6 +465,9 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
       }
     }
 
+    // Always scrub external model mentions to ensure LOOM AI branding integrity
+    finalContent = sanitizeModelOutput(finalContent);
+
     const MODEL_CREDIT_COSTS: Record<string, number> = {
       silk: 1,
       weave: 3,
@@ -447,12 +476,6 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
     // Casual pings / greetings only cost 1 credit, not full heavyweight draft price
     const creditsCost = isGreetingOrCasual ? 1 : MODEL_CREDIT_COSTS[selectedTier] || 3;
 
-    // Natural conversation token accounting:
-    // Usage tokens are weighed by:
-    // 1. Work done (output draft length / tokens)
-    // 2. Model reasoning strength (Silk: 1.0x, Weave: 1.6x, Tapestry: 3.0x deep reasoning)
-    // 3. Time taken during generation (server elapsed duration)
-    // 4. Off-context surcharge (+3500 tokens if user asks non-email tasks like maths/code)
     const elapsedDurationMs = Date.now() - requestStartTime;
     const elapsedSeconds = Math.max(0.1, elapsedDurationMs / 1000);
 
@@ -462,44 +485,63 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
     // Check if provider reported exact token metrics
     const providerPrompt = data?.usageMetadata?.promptTokenCount ?? data?.usage?.prompt_tokens;
     const providerCandidates = data?.usageMetadata?.candidatesTokenCount ?? data?.usage?.completion_tokens;
-    const providerTotal = data?.usageMetadata?.totalTokenCount ?? data?.usage?.total_tokens;
     const isProviderReported = typeof providerPrompt === 'number' && typeof providerCandidates === 'number';
 
-    let promptTokens: number;
-    let candidatesTokens: number;
-    let totalTokens: number;
+    // Base raw tokens
+    let rawPrompt: number;
+    let rawCandidates: number;
 
     if (isProviderReported) {
-      promptTokens = providerPrompt;
-      candidatesTokens = providerCandidates;
-      totalTokens = providerTotal ?? (promptTokens + candidatesTokens);
+      rawPrompt = providerPrompt;
+      rawCandidates = providerCandidates;
     } else {
-      // Accurate fallback estimation:
-      // Count total context sent: system prompt (guidelines + persona + profile) + entire conversation messages
       const fullConversationText = (messages || []).map((m: { content: string }) => m.content || '').join('\n');
       const totalInputText = `${systemPrompt}\n${fullConversationText}`;
-      promptTokens = Math.max(15, Math.ceil(totalInputText.length / 3.8));
-      candidatesTokens = Math.max(15, Math.ceil((finalContent.length || extractedContent.length || 0) / 3.8));
-
-      // Reasoning strength multipliers
-      const TIER_MULTIPLIERS: Record<string, number> = {
-        silk: 1.0,
-        weave: 1.4,
-        tapestry: 2.0,
-      };
-      const tierMultiplier = TIER_MULTIPLIERS[selectedTier] || 1.4;
-
-      // Time effort tokens (~20 tokens per second of generation time)
-      const timeEffortTokens = Math.round(elapsedSeconds * 20);
-
-      // Off-context surcharge (maths, code, homework queries)
-      const offContextSurcharge = isOffContext ? 2500 : 0;
-
-      const baseWeightedTokens = promptTokens + Math.round(candidatesTokens * tierMultiplier) + timeEffortTokens;
-      totalTokens = Math.max(120, baseWeightedTokens + offContextSurcharge);
+      rawPrompt = Math.max(15, Math.ceil(totalInputText.length / 3.8));
+      rawCandidates = Math.max(15, Math.ceil((finalContent.length || extractedContent.length || 0) / 3.8));
     }
 
-    const estimatedCostUsd = calculateEstimatedCost(actualModelUsed, promptTokens, candidatesTokens);
+    // Tier Allowance Accounting:
+    // Strictly guarantees Silk < Weave < Tapestry on EVERY interaction.
+    // Silk: Fast, ultra-lightweight footprint (~30-250 tokens deducted from 50k allowance)
+    // Weave: Balanced flagship intelligence (~70-550 tokens)
+    // Tapestry: Heavyweight deep reasoning & neural humanizer (~150-1400 tokens)
+    let silkTokens: number;
+    let weaveTokens: number;
+    let tapestryTokens: number;
+
+    if (isGreetingOrCasual) {
+      silkTokens = Math.min(50, Math.max(30, Math.round(rawPrompt * 0.08 + rawCandidates * 0.25)));
+      weaveTokens = Math.min(100, Math.max(70, Math.max(silkTokens + 30, Math.round(rawPrompt * 0.16 + rawCandidates * 0.5))));
+      tapestryTokens = Math.max(150, Math.max(weaveTokens + 60, Math.round(rawPrompt * 0.35 + rawCandidates * 1.0)));
+    } else {
+      silkTokens = Math.max(110, Math.round(rawPrompt * 0.25 + rawCandidates * 0.45));
+      weaveTokens = Math.max(320, Math.max(silkTokens + 180, Math.round(rawPrompt * 0.70 + rawCandidates * 0.95)));
+      tapestryTokens = Math.max(750, Math.max(weaveTokens + 350, Math.round(rawPrompt * 1.40 + rawCandidates * 2.20 + 250)));
+    }
+
+    // Off-context surcharge (maths, code, homework queries)
+    const offContextSurcharge: Record<string, number> = {
+      silk: isOffContext ? 1000 : 0,
+      weave: isOffContext ? 2000 : 0,
+      tapestry: isOffContext ? 4000 : 0,
+    };
+
+    let totalTokens = 0;
+    if (selectedTier === 'silk') {
+      totalTokens = silkTokens + offContextSurcharge.silk;
+    } else if (selectedTier === 'tapestry') {
+      totalTokens = tapestryTokens + offContextSurcharge.tapestry;
+    } else {
+      totalTokens = weaveTokens + offContextSurcharge.weave;
+    }
+
+    // Proportionally attribute prompt & candidate tokens to sum to totalTokens
+    const rawSum = Math.max(1, rawPrompt + rawCandidates);
+    const promptTokens = Math.max(10, Math.round((rawPrompt / rawSum) * totalTokens));
+    const candidatesTokens = Math.max(10, totalTokens - promptTokens);
+
+    const estimatedCostUsd = calculateEstimatedCost(actualModelUsed, rawPrompt, rawCandidates);
 
     // Persist server-side usage log in Supabase if table is present
     if (verifiedUserId && process.env.NEXT_PUBLIC_SUPABASE_URL) {

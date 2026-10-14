@@ -262,7 +262,11 @@ export function MessageBubble({
     // Calculate effective tokens used for this response
     const effectiveTokens =
       message.tokensUsed ||
-      Math.max(160, Math.round((message.content.length / 3.8) * (message.modelTier === 'tapestry' ? 2.0 : message.modelTier === 'weave' ? 1.4 : 1.0) + 120));
+      (message.modelTier === 'silk'
+        ? Math.max(110, Math.round((message.content.length / 3.8) * 0.45 + 80))
+        : message.modelTier === 'tapestry'
+        ? Math.max(750, Math.round((message.content.length / 3.8) * 2.2 + 350))
+        : Math.max(320, Math.round((message.content.length / 3.8) * 0.95 + 180)));
 
     // Open in Gmail using latest edited draft
     const handleOpenInGmail = () => {
@@ -560,7 +564,11 @@ export function MessageBubble({
   // Standard Conversational Assistant Message
   const effectiveTokens =
     message.tokensUsed ||
-    Math.max(120, Math.round((message.content.length / 3.8) * (message.modelTier === 'tapestry' ? 2.0 : message.modelTier === 'weave' ? 1.4 : 1.0) + 80));
+    (message.modelTier === 'silk'
+      ? Math.max(35, Math.round((message.content.length / 3.8) * 0.25 + 20))
+      : message.modelTier === 'tapestry'
+      ? Math.max(150, Math.round((message.content.length / 3.8) * 1.0 + 80))
+      : Math.max(75, Math.round((message.content.length / 3.8) * 0.5 + 40)));
 
   return (
     <div className="flex justify-start w-full animate-in fade-in duration-150">
