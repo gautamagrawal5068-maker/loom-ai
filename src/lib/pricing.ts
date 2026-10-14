@@ -14,6 +14,12 @@ export interface ModelPricingTier {
 
 export const MODEL_PRICING: Record<string, ModelPricingTier> = {
   // Silk (Fast, straightforward email generation)
+  'gemini-3.1-flash-lite': {
+    id: 'gemini-3.1-flash-lite',
+    name: 'LOOM Silk (Fast)',
+    inputPerMillionUsd: 0.0375,
+    outputPerMillionUsd: 0.15,
+  },
   'gemini-flash-lite-latest': {
     id: 'gemini-flash-lite-latest',
     name: 'LOOM Silk (Fast)',
@@ -21,6 +27,12 @@ export const MODEL_PRICING: Record<string, ModelPricingTier> = {
     outputPerMillionUsd: 0.15,
   },
   // Weave (Balanced writing quality and capability)
+  'gemini-3.5-flash-lite': {
+    id: 'gemini-3.5-flash-lite',
+    name: 'LOOM Weave (Balanced)',
+    inputPerMillionUsd: 0.05,
+    outputPerMillionUsd: 0.20,
+  },
   'gemini-3.5-flash': {
     id: 'gemini-3.5-flash',
     name: 'LOOM Weave (Balanced)',

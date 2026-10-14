@@ -106,13 +106,13 @@ export async function POST(request: NextRequest) {
 
     // Model Tier Mapping: Silk (fast), Weave (balanced), Tapestry (heavyweight reasoning)
     const MODEL_TIERS: Record<string, string> = {
-      silk: 'gemini-flash-lite-latest',
-      weave: 'gemini-3.5-flash',
-      tapestry: 'gemini-3.6-flash',
+      silk: 'gemini-3.1-flash-lite',
+      weave: 'gemini-3.5-flash-lite',
+      tapestry: 'gemini-flash-lite-latest',
     };
 
     const selectedTier = (modelTier as string)?.toLowerCase() || 'weave';
-    const activeModel = MODEL_TIERS[selectedTier] || modelName || 'gemini-3.5-flash';
+    const activeModel = MODEL_TIERS[selectedTier] || modelName || 'gemini-3.5-flash-lite';
 
     // 5. Validate messages array
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -265,11 +265,16 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
 
     const isGeminiNative = apiUrl.includes('generativelanguage.googleapis.com');
 
-    // Candidate fallback models for Gemini native to guard against temporary Google demand spikes
+    // Candidate models ordered by active tier, verified uptime, and available API quota
     const candidateModels = isGeminiNative
-      ? [activeModel, 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-lite-latest'].filter(
-          (m, idx, arr) => arr.indexOf(m) === idx
-        )
+      ? [
+          activeModel,
+          'gemini-3.5-flash-lite',
+          'gemini-3.1-flash-lite',
+          'gemini-flash-lite-latest',
+          'gemini-3-flash-preview',
+          'gemini-3.5-flash',
+        ].filter((m, idx, arr) => arr.indexOf(m) === idx)
       : [activeModel];
 
     const headers: Record<string, string> = {
@@ -284,8 +289,16 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
     let lastErrorText = '';
     let isTimeout = false;
 
+    // Fast 8-second individual attempt timeout prevents any hanging model from exhausting the 35s budget
+    const ATTEMPT_TIMEOUT_MS = 8000;
+
     try {
       for (const modelToTry of candidateModels) {
+        if (controller.signal.aborted) {
+          isTimeout = true;
+          break;
+        }
+
         let targetUrl = apiUrl;
         let payload: Record<string, unknown>;
 
@@ -315,13 +328,26 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
           };
         }
 
+        const attemptController = new AbortController();
+        let attemptTimedOut = false;
+        const attemptTimer = setTimeout(() => {
+          attemptTimedOut = true;
+          attemptController.abort();
+        }, ATTEMPT_TIMEOUT_MS);
+
+        const onGlobalAbort = () => attemptController.abort();
+        controller.signal.addEventListener('abort', onGlobalAbort, { once: true });
+
         try {
           const res = await fetch(targetUrl, {
             method: 'POST',
             headers,
             body: JSON.stringify(payload),
-            signal: controller.signal,
+            signal: attemptController.signal,
           });
+
+          clearTimeout(attemptTimer);
+          controller.signal.removeEventListener('abort', onGlobalAbort);
 
           if (res.ok) {
             response = res;
@@ -329,23 +355,31 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
             break;
           }
 
-          // If temporary overload (503) or rate limit (429) or not found (404), try fallback candidate
+          // If temporary overload (503), rate limit / quota (429), not found (404), or server error (500), try next candidate
           lastErrorText = await res.text().catch(() => `HTTP ${res.status}`);
-          if (res.status === 503 || res.status === 429 || res.status === 404) {
+          if (res.status === 503 || res.status === 429 || res.status === 404 || res.status >= 500) {
             console.warn(`Model ${modelToTry} returned ${res.status}, attempting fallback...`);
             continue;
           }
 
-          // Other errors: abort fallback loop
+          // Other client error (e.g. 400 Bad Request): abort fallback loop and report
           response = res;
           actualModelUsed = modelToTry;
           break;
         } catch (fetchErr: unknown) {
-          const err = fetchErr as Error & { name?: string };
-          if (err.name === 'AbortError' || controller.signal.aborted) {
+          clearTimeout(attemptTimer);
+          controller.signal.removeEventListener('abort', onGlobalAbort);
+
+          if (controller.signal.aborted) {
             isTimeout = true;
             break;
           }
+
+          if (attemptTimedOut) {
+            console.warn(`Model ${modelToTry} timed out after ${ATTEMPT_TIMEOUT_MS}ms, attempting fallback...`);
+            continue;
+          }
+
           console.warn(`Fetch error with model ${modelToTry}:`, fetchErr);
         }
       }

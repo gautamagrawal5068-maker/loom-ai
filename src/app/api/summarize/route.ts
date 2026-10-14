@@ -70,7 +70,7 @@ Guidelines:
 
     const isGeminiNative = apiUrl.includes('generativelanguage.googleapis.com');
     const candidateModels = isGeminiNative
-      ? ['gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-3.6-flash']
+      ? ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3-flash-preview']
       : [modelName];
 
     const headers: Record<string, string> = {
@@ -85,8 +85,11 @@ Guidelines:
 
     let res: Response | undefined;
     let lastErr = '';
+    const ATTEMPT_TIMEOUT_MS = 8000;
 
     for (const modelToTry of candidateModels) {
+      if (controller.signal.aborted) break;
+
       let targetUrl = apiUrl;
       let payload: Record<string, unknown>;
 
@@ -119,21 +122,44 @@ Guidelines:
         };
       }
 
+      const attemptController = new AbortController();
+      let attemptTimedOut = false;
+      const attemptTimer = setTimeout(() => {
+        attemptTimedOut = true;
+        attemptController.abort();
+      }, ATTEMPT_TIMEOUT_MS);
+
+      const onGlobalAbort = () => attemptController.abort();
+      controller.signal.addEventListener('abort', onGlobalAbort, { once: true });
+
       try {
         const response = await fetch(targetUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
-          signal: controller.signal,
+          signal: attemptController.signal,
         });
+
+        clearTimeout(attemptTimer);
+        controller.signal.removeEventListener('abort', onGlobalAbort);
 
         if (response.ok) {
           res = response;
           break;
         } else {
           lastErr = await response.text().catch(() => response.statusText);
+          if (response.status === 503 || response.status === 429 || response.status === 404 || response.status >= 500) {
+            continue;
+          }
+          break;
         }
       } catch (fErr: unknown) {
+        clearTimeout(attemptTimer);
+        controller.signal.removeEventListener('abort', onGlobalAbort);
+
+        if (controller.signal.aborted) break;
+        if (attemptTimedOut) continue;
+
         lastErr = fErr instanceof Error ? fErr.message : 'Network error';
       }
     }
