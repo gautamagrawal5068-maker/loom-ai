@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Plus,
   Search,
@@ -46,7 +45,6 @@ export function Sidebar({
   onOpenStyleModal,
   profile,
 }: SidebarProps) {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -95,11 +93,23 @@ export function Sidebar({
   };
 
   const handleSignOut = async () => {
-    if (isSupabaseConfigured()) {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+    try {
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      }
+      if (typeof document !== 'undefined') {
+        document.cookie = 'loom_onboarding_completed=; path=/; max-age=0; SameSite=Lax';
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('loom_onboarding_completed');
+        localStorage.removeItem('loom-ai-active-conversation');
+      }
+    } catch (err) {
+      console.warn('Sign out warning:', err);
+    } finally {
+      window.location.href = '/';
     }
-    router.replace('/');
   };
 
   return (
