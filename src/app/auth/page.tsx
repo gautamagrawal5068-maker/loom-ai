@@ -363,13 +363,19 @@ function AuthContent() {
           </form>
         </div>
 
-        {/* Back Link */}
-        <div className="text-center mt-6">
+        {/* Guest and Navigation Links */}
+        <div className="flex items-center justify-between mt-6 px-1">
           <Link
-            href="/"
+            href="/landing"
             className="text-xs text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1 font-mono"
           >
-            ← Back to LOOM AI
+            ← About LOOM AI
+          </Link>
+          <Link
+            href="/app"
+            className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center gap-1 font-mono font-medium"
+          >
+            Continue as Guest →
           </Link>
         </div>
       </div>
