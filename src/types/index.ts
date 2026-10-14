@@ -151,5 +151,8 @@ export interface ChatResponse {
   modelUsed?: string;
   creditsCost?: number;
   remainingCredits?: number;
+  tokensUsed?: number;
+  remainingTokens?: number;
+  resetAt?: number;
   usage?: TokenUsage;
 }

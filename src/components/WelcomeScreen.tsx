@@ -4,6 +4,7 @@ import { Mail, Sparkles, Reply, PenLine, ArrowRight, BookOpen, FileSearch } from
 
 interface WelcomeScreenProps {
   userName?: string | null;
+  isLoading?: boolean;
   onSuggestionClick: (text: string) => void;
   onOpenStyleModal: () => void;
   hasStyleSample: boolean;
@@ -21,6 +22,7 @@ function getTimeGreeting(): string {
 
 export function WelcomeScreen({
   userName,
+  isLoading = false,
   onSuggestionClick,
   onOpenStyleModal,
   hasStyleSample,
@@ -85,7 +87,8 @@ export function WelcomeScreen({
           <button
             type="button"
             onClick={onOpenTemplatesModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
           >
             <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
             <span>Templates</span>
@@ -96,7 +99,8 @@ export function WelcomeScreen({
           <button
             type="button"
             onClick={onOpenReplyModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
           >
             <Reply className="w-3.5 h-3.5 text-cyan-400" />
             <span>Reply to Email</span>
@@ -107,7 +111,8 @@ export function WelcomeScreen({
           <button
             type="button"
             onClick={onOpenSummarizeModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
           >
             <FileSearch className="w-3.5 h-3.5 text-cyan-400" />
             <span>Summarize</span>
@@ -117,7 +122,8 @@ export function WelcomeScreen({
         <button
           type="button"
           onClick={onOpenStyleModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
+          disabled={isLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.06] hover:border-cyan-500/30 text-xs font-mono text-zinc-300 transition-all cursor-pointer shadow-xs"
         >
           <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
           <span>{hasStyleSample ? 'Writing Voice (Active)' : 'Teach Voice'}</span>
@@ -130,7 +136,8 @@ export function WelcomeScreen({
           <button
             key={index}
             onClick={() => onSuggestionClick(suggestion.prompt)}
-            className="group flex flex-col justify-between p-3.5 bg-[#0d0f17] hover:bg-[#121520] border border-white/[0.08] hover:border-cyan-500/40 rounded-xl text-left shadow-xs transition-colors cursor-pointer"
+            disabled={isLoading}
+            className="group flex flex-col justify-between p-3.5 bg-[#0d0f17] hover:bg-[#121520] disabled:opacity-50 disabled:cursor-not-allowed border border-white/[0.08] hover:border-cyan-500/40 rounded-xl text-left shadow-xs transition-colors cursor-pointer"
           >
             <div className="flex items-center justify-between w-full mb-2">
               <div className="flex items-center gap-2">

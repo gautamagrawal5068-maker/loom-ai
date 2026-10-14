@@ -7,10 +7,31 @@ import { Logo } from '@/components/Logo';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { Mail, Lock, AlertCircle, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 
+function getSafeRedirectUrl(target: string | null): string {
+  if (!target) return '/app';
+  if (
+    target.startsWith('/') &&
+    !target.startsWith('//') &&
+    !target.startsWith('/\\') &&
+    !target.includes('@')
+  ) {
+    try {
+      const dummyOrigin = 'http://localhost';
+      const parsed = new URL(target, dummyOrigin);
+      if (parsed.origin === dummyOrigin) {
+        return parsed.pathname + parsed.search + parsed.hash;
+      }
+    } catch {
+      return '/app';
+    }
+  }
+  return '/app';
+}
+
 function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/app';
+  const redirectTo = getSafeRedirectUrl(searchParams.get('redirectTo'));
   const urlError = searchParams.get('error');
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -366,7 +387,7 @@ function AuthContent() {
         {/* Guest and Navigation Links */}
         <div className="flex items-center justify-between mt-6 px-1">
           <Link
-            href="/landing"
+            href="/"
             className="text-xs text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1 font-mono"
           >
             ← About LOOM AI

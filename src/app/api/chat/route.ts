@@ -23,25 +23,69 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. User session verification if Supabase configured
+    // 3. User session verification & server-enforced quota
     let verifiedUserId: string | null = null;
+    let tokensRemaining: number = 50_000;
+
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       try {
         const supabase = await createClient();
         const {
           data: { user },
+          error: authError,
         } = await supabase.auth.getUser();
 
-        if (user) {
-          verifiedUserId = user.id;
-        } else if (process.env.NODE_ENV === 'production' && process.env.REQUIRE_AUTH === 'true') {
+        if (authError || !user) {
           return NextResponse.json(
             { error: 'Unauthorized: Please sign in to draft emails with LOOM AI.' },
             { status: 401 }
           );
         }
+        verifiedUserId = user.id;
+
+        // Enforce 50,000 token quota per 5-hour window directly from server logs
+        const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+        const { data: usageRows, error: usageErr } = await supabase
+          .from('usage_logs')
+          .select('total_tokens, created_at')
+          .eq('user_id', verifiedUserId)
+          .gte('created_at', fiveHoursAgo);
+
+        if (!usageErr && Array.isArray(usageRows)) {
+          const totalUsedInWindow = usageRows.reduce(
+            (sum, row) => sum + (row.total_tokens || 0),
+            0
+          );
+
+          if (totalUsedInWindow >= 50_000) {
+            const earliestTime = usageRows.reduce((min, row) => {
+              const t = new Date(row.created_at).getTime();
+              return t < min ? t : min;
+            }, Date.now());
+            const resetAt = earliestTime + 5 * 60 * 60 * 1000;
+            const msRemaining = Math.max(0, resetAt - Date.now());
+            const hours = Math.floor(msRemaining / (1000 * 60 * 60));
+            const mins = Math.floor((msRemaining % (1000 * 60 * 60)) / (1000 * 60));
+            const timeFormatted = `${hours}h ${mins.toString().padStart(2, '0')}m`;
+
+            return NextResponse.json(
+              {
+                error: `50,000 messaging token quota reached. Quota refills in ${timeFormatted}.`,
+                tokensRemaining: 0,
+                resetAt,
+              },
+              { status: 429 }
+            );
+          }
+
+          tokensRemaining = Math.max(0, 50_000 - totalUsedInWindow);
+        }
       } catch (authErr) {
-        console.warn('Session verification warning:', authErr);
+        console.error('Session or quota verification error:', authErr);
+        return NextResponse.json(
+          { error: 'Unauthorized: Please sign in to draft emails with LOOM AI.' },
+          { status: 401 }
+        );
       }
     }
 
@@ -480,6 +524,8 @@ CRITICAL INSTRUCTION: Analyze the writing style above. Emulate the user's typica
       content: finalContent,
       modelUsed: selectedTier,
       creditsCost,
+      tokensUsed: totalTokens,
+      remainingTokens: Math.max(0, tokensRemaining - totalTokens),
       usage: {
         promptTokens,
         candidatesTokens,

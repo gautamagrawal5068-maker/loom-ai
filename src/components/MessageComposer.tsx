@@ -85,6 +85,7 @@ export function MessageComposer({
 
   // Voice dictation state
   const [isListening, setIsListening] = useState(false);
+  const isListeningRef = useRef(false);
   const [dictationError, setDictationError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstanceLike | null>(null);
   const initialSpeechTextRef = useRef('');
@@ -140,6 +141,18 @@ export function MessageComposer({
     const trimmed = content.trim();
     if (!trimmed || isLoading || isLocked) return;
 
+    // Immediately terminate any active voice dictation session
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Ignore
+      }
+    }
+    isListeningRef.current = false;
+    setIsListening(false);
+    initialSpeechTextRef.current = '';
+
     onSend(trimmed);
     setContent('');
 
@@ -168,6 +181,7 @@ export function MessageComposer({
           // Ignore
         }
       }
+      isListeningRef.current = false;
       setIsListening(false);
       return;
     }
@@ -193,10 +207,12 @@ export function MessageComposer({
       initialSpeechTextRef.current = content;
 
       recognition.onstart = () => {
+        isListeningRef.current = true;
         setIsListening(true);
       };
 
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
+        if (!isListeningRef.current) return;
         let transcript = '';
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
@@ -219,11 +235,13 @@ export function MessageComposer({
         } else if (event.error !== 'no-speech') {
           setDictationError(`Dictation error: ${event.error}`);
         }
+        isListeningRef.current = false;
         setIsListening(false);
         setTimeout(() => setDictationError(null), 5000);
       };
 
       recognition.onend = () => {
+        isListeningRef.current = false;
         setIsListening(false);
       };
 
@@ -232,6 +250,7 @@ export function MessageComposer({
     } catch (err: unknown) {
       console.error('Failed to start dictation:', err);
       setDictationError('Could not start microphone session.');
+      isListeningRef.current = false;
       setIsListening(false);
       setTimeout(() => setDictationError(null), 4000);
     }

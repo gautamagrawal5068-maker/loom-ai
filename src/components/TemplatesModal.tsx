@@ -8,6 +8,7 @@ import { EmailTemplate } from '@/types';
 interface TemplatesModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isLoading?: boolean;
   onSelectTemplate: (templatePrompt: string) => void;
 }
 
@@ -26,6 +27,7 @@ const CATEGORIES = [
 export function TemplatesModal({
   isOpen,
   onClose,
+  isLoading = false,
   onSelectTemplate,
 }: TemplatesModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -142,7 +144,8 @@ export function TemplatesModal({
                   <button
                     type="button"
                     onClick={() => handleUseTemplate(template)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181d2d] hover:bg-cyan-500/20 text-[#f8fafc] hover:text-cyan-300 border border-white/[0.08] hover:border-cyan-500/40 text-xs font-sans font-medium transition-all cursor-pointer shadow-xs"
+                    disabled={isLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181d2d] hover:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-[#f8fafc] hover:text-cyan-300 border border-white/[0.08] hover:border-cyan-500/40 text-xs font-sans font-medium transition-all cursor-pointer shadow-xs"
                   >
                     <span>Use Template</span>
                     <ArrowRight className="w-3 h-3" />

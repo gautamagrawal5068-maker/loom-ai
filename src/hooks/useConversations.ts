@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Conversation, Message, ChatResponse, EmailTone, ChatRequest, UserProfile, ModelTier, MODEL_CREDIT_COSTS, UserCategory, EmailPurpose, PreferredStyle, WritingProfile, UsageStats } from '@/types';
+import { Conversation, Message, ChatResponse, EmailTone, ChatRequest, UserProfile, ModelTier, MODEL_CREDIT_COSTS, UserCategory, EmailPurpose, PreferredStyle, WritingProfile, UsageStats, DraftRevision } from '@/types';
 import {
   generateId,
   loadConversations as loadLocalConversations,
@@ -283,16 +283,17 @@ export function useConversations() {
                 }));
               }
 
-              // 3. Fallback to local conversations and auto-migrate to Supabase if remote is empty
+              // 3. Merge local conversations with Supabase conversations
               const localConvs = loadLocalConversations();
               const deletedIds = loadDeletedConversationIds();
               const validLocalConvs = localConvs.filter((c) => !deletedIds.has(c.id));
 
-              if (loadedConvs.length === 0 && validLocalConvs.length > 0 && user?.id) {
-                const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-                const migratedList: Conversation[] = [];
+              const existingRemoteIds = new Set(loadedConvs.map((c) => c.id));
+              const unsyncedLocalConvs = validLocalConvs.filter((c) => !existingRemoteIds.has(c.id));
 
-                for (const localC of validLocalConvs) {
+              if (unsyncedLocalConvs.length > 0 && user?.id) {
+                const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                for (const localC of unsyncedLocalConvs) {
                   const targetConvId = UUID_REGEX.test(localC.id) ? localC.id : generateId();
                   try {
                     await supabase.from('conversations').insert({
@@ -317,7 +318,7 @@ export function useConversations() {
                       await supabase.from('messages').insert(validMessages);
                     }
 
-                    migratedList.push({
+                    loadedConvs.push({
                       ...localC,
                       id: targetConvId,
                       messages: validMessages.map((vm, idx) => ({
@@ -327,15 +328,29 @@ export function useConversations() {
                     });
                   } catch (migErr) {
                     console.error('Failed to migrate local conversation to Supabase:', migErr);
-                    migratedList.push(localC);
+                    loadedConvs.push(localC);
                   }
                 }
-                saveLocalConversations(migratedList);
-                loadedConvs = migratedList;
+              } else if (unsyncedLocalConvs.length > 0 && !user?.id) {
+                // In guest mode, keep unsynced local conversations alongside loaded
+                loadedConvs = [...loadedConvs, ...unsyncedLocalConvs];
               }
 
-              let allConvs = loadedConvs.length > 0 ? loadedConvs : validLocalConvs;
-              allConvs = allConvs.filter((c) => !deletedIds.has(c.id));
+              // Deduplicate and filter deleted
+              const convMap = new Map<string, Conversation>();
+              loadedConvs.forEach((c) => {
+                if (!deletedIds.has(c.id)) {
+                  convMap.set(c.id, c);
+                }
+              });
+              validLocalConvs.forEach((c) => {
+                if (!deletedIds.has(c.id) && !convMap.has(c.id)) {
+                  convMap.set(c.id, c);
+                }
+              });
+
+              const allConvs = Array.from(convMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+              saveLocalConversations(allConvs);
 
               if (isMounted) {
                 setConversations(allConvs);
@@ -461,7 +476,7 @@ export function useConversations() {
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) || null;
 
-  async function createConversation(): Promise<string> {
+  const createConversation = useCallback(async (): Promise<string> => {
     const tempId = generateId();
     const newTitle = 'New Conversation';
 
@@ -508,7 +523,7 @@ export function useConversations() {
     setConversations((prev) => [newConversation, ...prev]);
     setActiveConversationId(tempId);
     return tempId;
-  }
+  }, [userId, activeTone]);
 
   async function deleteConversation(id: string): Promise<void> {
     // 1. Mark permanently deleted in tombstone storage so it never reappears
@@ -563,166 +578,188 @@ export function useConversations() {
     setActiveToneState(target?.tone || null);
   }
 
-  async function sendMessage(
-    content: string,
-    requestContext?: string,
-    overrideTone?: EmailTone | null
-  ): Promise<void> {
-    const toneToUse = overrideTone !== undefined ? overrideTone : activeTone;
-    let targetConversationId = activeConversationId;
-    let currentConv = conversations.find((c) => c.id === targetConversationId);
+  const sendMessage = useCallback(
+    async (
+      content: string,
+      requestContext?: string | null,
+      overrideTone?: EmailTone | null,
+      options?: { messagesOverride?: Message[] }
+    ): Promise<void> => {
+      const toneToUse = overrideTone !== undefined ? overrideTone : activeTone;
+      let targetConversationId = activeConversationId;
+      let currentConv = conversations.find((c) => c.id === targetConversationId);
 
-    if (!targetConversationId || !currentConv) {
-      targetConversationId = await createConversation();
-      currentConv = {
-        id: targetConversationId,
-        title: 'New Conversation',
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        tone: toneToUse,
-      };
-    }
+      if (!targetConversationId || !currentConv) {
+        targetConversationId = await createConversation();
+        currentConv = {
+          id: targetConversationId,
+          title: 'New Conversation',
+          messages: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          tone: toneToUse,
+        };
+      }
 
-    if (credits <= 0) {
-      const activeCountdown = getTokensCountdownFormatted() || '5h 00m';
-      setTokensCountdown(activeCountdown);
-      const topUpId = generateId();
-      const topUpMsg: Message = {
-        id: topUpId,
-        role: 'assistant',
-        content: `You have consumed your **50,000 token limit** (50k tokens).\n\nUsage is paused for **5 hours**. Your messaging allowance will automatically refill in **${activeCountdown}**.`,
+      if (credits <= 0) {
+        const activeCountdown = getTokensCountdownFormatted() || '5h 00m';
+        setTokensCountdown(activeCountdown);
+        const topUpId = generateId();
+        const topUpMsg: Message = {
+          id: topUpId,
+          role: 'assistant',
+          content: `You have consumed your **50,000 token limit** (50k tokens).\n\nUsage is paused for **5 hours**. Your messaging allowance will automatically refill in **${activeCountdown}**.`,
+          timestamp: Date.now(),
+          isError: true,
+        };
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === targetConversationId
+              ? { ...c, messages: [...c.messages, topUpMsg], updatedAt: Date.now() }
+              : c
+          )
+        );
+        return;
+      }
+
+      const tempUserMsgId = generateId();
+      const userMessage: Message = {
+        id: tempUserMsgId,
+        role: 'user',
+        content,
         timestamp: Date.now(),
-        isError: true,
       };
+
+      const existingMessages = options?.messagesOverride || currentConv.messages;
+      const cleanHistory = existingMessages.filter((m) => !m.isError);
+      const conversationMessages = cleanHistory.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      conversationMessages.push({ role: 'user', content });
+
+      const isFirstUserMessage = !cleanHistory.some((m) => m.role === 'user');
+      const updatedTitle = isFirstUserMessage
+        ? content.slice(0, 42).trim() + (content.length > 42 ? '...' : '')
+        : currentConv.title;
+
+      // Optimistically update UI
       setConversations((prev) =>
-        prev.map((c) =>
-          c.id === targetConversationId
-            ? { ...c, messages: [...c.messages, topUpMsg], updatedAt: Date.now() }
-            : c
-        )
+        prev.map((c) => {
+          if (c.id === targetConversationId) {
+            const baseMessages = options?.messagesOverride || c.messages;
+            return {
+              ...c,
+              title: updatedTitle,
+              tone: toneToUse,
+              messages: [...baseMessages, userMessage],
+              updatedAt: Date.now(),
+            };
+          }
+          return c;
+        })
       );
-      return;
-    }
 
-    const tempUserMsgId = generateId();
-    const userMessage: Message = {
-      id: tempUserMsgId,
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
+      // Persist user message in Supabase
+      if (userId && isSupabaseConfigured()) {
+        try {
+          const supabase = createClient();
+          await supabase.from('messages').insert({
+            id: tempUserMsgId,
+            conversation_id: targetConversationId,
+            role: 'user',
+            content,
+            is_error: false,
+          });
 
-    const existingMessages = currentConv.messages;
-    const conversationMessages = existingMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-    conversationMessages.push({ role: 'user', content });
-
-    const isFirstUserMessage = !existingMessages.some((m) => m.role === 'user');
-    const updatedTitle = isFirstUserMessage
-      ? content.slice(0, 42).trim() + (content.length > 42 ? '...' : '')
-      : currentConv.title;
-
-    // Optimistically update UI
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id === targetConversationId) {
-          return {
-            ...c,
-            title: updatedTitle,
-            tone: toneToUse,
-            messages: [...c.messages, userMessage],
-            updatedAt: Date.now(),
-          };
+          if (isFirstUserMessage) {
+            await supabase
+              .from('conversations')
+              .update({ title: updatedTitle, tone: toneToUse, updated_at: new Date().toISOString() })
+              .eq('id', targetConversationId);
+          }
+        } catch (err) {
+          console.error('Supabase user message persist error:', err);
         }
-        return c;
-      })
-    );
+      }
 
-    // Persist user message in Supabase
-    if (userId && isSupabaseConfigured()) {
+      setIsLoading(true);
+
       try {
-        const supabase = createClient();
-        await supabase.from('messages').insert({
-          id: tempUserMsgId,
-          conversation_id: targetConversationId,
-          role: 'user',
-          content,
-          is_error: false,
+        const effectiveContext = requestContext || currentConv.context || null;
+        const effectiveCategory = writingProfile?.userCategory || profile?.user_category || null;
+        const effectivePurpose = writingProfile?.emailPurpose || profile?.email_purpose || null;
+        const effectiveStyle = writingProfile?.preferredStyle || profile?.preferred_style || null;
+
+        const payload: ChatRequest = {
+          messages: conversationMessages,
+          styleSample: writingProfile?.styleSample || styleSample || profile?.style_sample || null,
+          tone: toneToUse,
+          modelTier,
+          context: effectiveContext,
+          writingProfile: writingProfile || null,
+          userCategory: effectiveCategory,
+          emailPurpose: effectivePurpose,
+          preferredStyle: effectiveStyle,
+        };
+
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
 
-        if (isFirstUserMessage) {
-          await supabase
-            .from('conversations')
-            .update({ title: updatedTitle, tone: toneToUse, updated_at: new Date().toISOString() })
-            .eq('id', targetConversationId);
+        if (!response.ok) {
+          let errorMsg = `Server error (${response.status})`;
+          let errData: Record<string, unknown> | null = null;
+          try {
+            errData = await response.json();
+            if (errData?.error && typeof errData.error === 'string') errorMsg = errData.error;
+          } catch {
+            // ignore parse error
+          }
+
+          if (response.status === 429) {
+            setCreditsState(0);
+            saveLocalCredits(0);
+            if (errData?.resetAt && typeof errData.resetAt === 'number') {
+              localStorage.setItem('loom-ai-tokens-reset-at', errData.resetAt.toString());
+            }
+            setTokensCountdown(getTokensCountdownFormatted() || '5h 00m');
+          }
+          throw new Error(errorMsg);
         }
-      } catch (err) {
-        console.error('Supabase user message persist error:', err);
-      }
-    }
 
-    setIsLoading(true);
+        const data: ChatResponse = await response.json();
 
-    try {
-      const effectiveContext = requestContext || currentConv.context || null;
-      const effectiveCategory = writingProfile?.userCategory || profile?.user_category || null;
-      const effectivePurpose = writingProfile?.emailPurpose || profile?.email_purpose || null;
-      const effectiveStyle = writingProfile?.preferredStyle || profile?.preferred_style || null;
-
-      const payload: ChatRequest = {
-        messages: conversationMessages,
-        styleSample: writingProfile?.styleSample || styleSample || profile?.style_sample || null,
-        tone: toneToUse,
-        modelTier,
-        context: effectiveContext,
-        writingProfile: writingProfile || null,
-        userCategory: effectiveCategory,
-        emailPurpose: effectivePurpose,
-        preferredStyle: effectiveStyle,
-      };
-
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        let errorMsg = `Server error (${response.status})`;
-        try {
-          const errData = await response.json();
-          if (errData?.error) errorMsg = errData.error;
-        } catch {
-          // ignore parse error
+        if (data.error) {
+          throw new Error(data.error);
         }
-        throw new Error(errorMsg);
-      }
 
-      const data: ChatResponse = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // Record genuine token usage from server
-      if (data.usage) {
-        const updated = recordUsage(data.usage);
-        setUsageStats(updated);
-      }
-
-      // Deduct tokens consumed from 50k token pool
-      const tokensConsumed = data.usage?.totalTokens || MODEL_CREDIT_COSTS[modelTier] || 1000;
-      setCreditsState((prev) => {
-        const next = Math.max(0, prev - tokensConsumed);
-        saveLocalCredits(next);
-        if (next === 0) {
-          setTokensCountdown(getTokensCountdownFormatted() || '5h 00m');
+        // Record genuine token usage from server
+        if (data.usage) {
+          const updated = recordUsage(data.usage);
+          setUsageStats(updated);
         }
-        return next;
-      });
+
+        // Deduct or synchronize tokens from server response
+        const tokensConsumed = data.tokensUsed || data.usage?.totalTokens || MODEL_CREDIT_COSTS[modelTier] || 1000;
+        if (typeof data.remainingTokens === 'number') {
+          setCreditsState(data.remainingTokens);
+          saveLocalCredits(data.remainingTokens);
+          if (data.remainingTokens === 0) {
+            setTokensCountdown(getTokensCountdownFormatted() || '5h 00m');
+          }
+        } else {
+          setCreditsState((prev) => {
+            const next = Math.max(0, prev - tokensConsumed);
+            saveLocalCredits(next);
+            if (next === 0) {
+              setTokensCountdown(getTokensCountdownFormatted() || '5h 00m');
+            }
+            return next;
+          });
+        }
 
       const tempAssistantId = generateId();
       const assistantMessage: Message = {
@@ -799,9 +836,20 @@ export function useConversations() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [
+    activeConversationId,
+    conversations,
+    createConversation,
+    credits,
+    activeTone,
+    userId,
+    writingProfile,
+    profile,
+    styleSample,
+    modelTier,
+  ]);
 
-  function retryLastMessage(): void {
+  const retryLastMessage = useCallback(async (): Promise<void> => {
     if (!activeConversation) return;
 
     const messages = activeConversation.messages;
@@ -823,6 +871,9 @@ export function useConversations() {
     if (!lastUserContent || lastUserIndex === -1) return;
 
     const userMessageToRetry = messages[lastUserIndex];
+    const cleanedMessages = messages.filter(
+      (m) => m.id !== lastMessage.id && m.id !== userMessageToRetry.id && !m.isError
+    );
 
     // Remove BOTH the error message and the failed user message from local state
     setConversations((prev) =>
@@ -830,9 +881,7 @@ export function useConversations() {
         c.id === activeConversationId
           ? {
               ...c,
-              messages: c.messages.filter(
-                (m) => m.id !== lastMessage.id && m.id !== userMessageToRetry.id
-              ),
+              messages: cleanedMessages,
               updatedAt: Date.now(),
             }
           : c
@@ -843,18 +892,16 @@ export function useConversations() {
     if (userId && isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        supabase.from('messages').delete().in('id', [lastMessage.id, userMessageToRetry.id]);
-      } catch {
-        // ignore
+        await supabase.from('messages').delete().in('id', [lastMessage.id, userMessageToRetry.id]);
+      } catch (err) {
+        console.error('Supabase message deletion error:', err);
       }
     }
 
-    setTimeout(() => {
-      sendMessage(lastUserContent);
-    }, 50);
-  }
+    await sendMessage(lastUserContent, null, null, { messagesOverride: cleanedMessages });
+  }, [activeConversation, activeConversationId, userId, sendMessage]);
 
-  const setWritingProfile = useCallback((newProf: WritingProfile) => {
+  const setWritingProfile = useCallback(async (newProf: WritingProfile): Promise<void> => {
     setWritingProfileState(newProf);
     saveWritingProfile(newProf);
     if (newProf.styleSample !== undefined) {
@@ -868,8 +915,11 @@ export function useConversations() {
     if (userId && isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        supabase.from('profiles').update({
-          style_sample: newProf.styleSample,
+        await supabase.from('profiles').update({
+          style_sample: newProf.styleSample || '',
+          user_category: newProf.userCategory || null,
+          email_purpose: newProf.emailPurpose || null,
+          preferred_style: newProf.preferredStyle || null,
           updated_at: new Date().toISOString(),
         }).eq('id', userId);
       } catch (err) {
@@ -890,7 +940,13 @@ export function useConversations() {
   }, [activeConversationId]);
 
   const updateMessageDraft = useCallback(
-    async (messageId: string, subject: string, body: string) => {
+    async (
+      messageId: string,
+      subject: string,
+      body: string,
+      updatedRevisions?: DraftRevision[],
+      activeRevIdx?: number
+    ) => {
       const newContent = `Subject: ${subject}\n\n${body}`;
       setConversations((prev) =>
         prev.map((c) => {
@@ -898,9 +954,15 @@ export function useConversations() {
           if (!hasMessage) return c;
           return {
             ...c,
-            messages: c.messages.map((m) =>
-              m.id === messageId ? { ...m, content: newContent } : m
-            ),
+            messages: c.messages.map((m) => {
+              if (m.id !== messageId) return m;
+              return {
+                ...m,
+                content: newContent,
+                revisions: updatedRevisions || m.revisions,
+                currentRevisionIndex: activeRevIdx ?? m.currentRevisionIndex,
+              };
+            }),
             updatedAt: Date.now(),
           };
         })

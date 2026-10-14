@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Reply,
@@ -19,6 +19,7 @@ interface ReplySummarizeModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: 'reply' | 'summarize';
+  isLoading?: boolean;
   onGenerateDraft: (prompt: string, context?: string) => void;
 }
 
@@ -35,9 +36,17 @@ export function ReplySummarizeModal({
   isOpen,
   onClose,
   initialTab = 'reply',
+  isLoading = false,
   onGenerateDraft,
 }: ReplySummarizeModalProps) {
   const [activeTab, setActiveTab] = useState<'reply' | 'summarize'>(initialTab);
+
+  // Synchronize active tab whenever modal opens or initialTab prop changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   // Reply tab state
   const [receivedEmail, setReceivedEmail] = useState('');
@@ -54,7 +63,7 @@ export function ReplySummarizeModal({
   if (!isOpen) return null;
 
   const handleCreateReply = () => {
-    if (!receivedEmail.trim()) return;
+    if (!receivedEmail.trim() || isLoading) return;
 
     let prompt = `Help me draft a clear, context-aware reply to the following received email:
 
@@ -352,7 +361,8 @@ ${receivedEmail.trim()}
                     <button
                       type="button"
                       onClick={handleReplyFromSummary}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-sans font-semibold text-xs transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.25)]"
+                      disabled={isLoading}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-950 font-sans font-semibold text-xs transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.25)]"
                     >
                       <Reply className="w-3.5 h-3.5" />
                       <span>Generate Reply from this Summary</span>
@@ -377,9 +387,9 @@ ${receivedEmail.trim()}
             <button
               type="button"
               onClick={handleCreateReply}
-              disabled={!receivedEmail.trim()}
+              disabled={!receivedEmail.trim() || isLoading}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-sans font-semibold transition-all ${
-                !receivedEmail.trim()
+                !receivedEmail.trim() || isLoading
                   ? 'bg-zinc-800/80 text-zinc-500 cursor-not-allowed border border-white/[0.04]'
                   : 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 shadow-[0_0_15px_rgba(34,211,238,0.25)] cursor-pointer'
               }`}

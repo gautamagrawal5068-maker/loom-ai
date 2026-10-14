@@ -373,4 +373,27 @@ export function recordUsage(usage: TokenUsage): UsageStats {
   }
 }
 
+/**
+ * Completely purges all user data, cached emails, tokens, profiles, and cookies
+ * upon signing out to prevent data leaks between user accounts on shared devices.
+ */
+export function clearUserDataOnLogout(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('loom-ai-') || key.startsWith('loom_'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    if (typeof document !== 'undefined') {
+      document.cookie = 'loom_onboarding_completed=; path=/; max-age=0; SameSite=Lax';
+    }
+  } catch (err) {
+    console.error('Failed to clear user data on logout:', err);
+  }
+}
+
 

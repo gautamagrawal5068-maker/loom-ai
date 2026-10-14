@@ -23,9 +23,16 @@ import { Message, EmailTone, DraftRevision } from '@/types';
 
 interface MessageBubbleProps {
   message: Message;
+  isLoading?: boolean;
   onRetry?: () => void;
   onQuickPrompt?: (prompt: string) => void;
-  onUpdateMessageDraft?: (messageId: string, subject: string, body: string) => void;
+  onUpdateMessageDraft?: (
+    messageId: string,
+    subject: string,
+    body: string,
+    revisions?: DraftRevision[],
+    revisionIdx?: number
+  ) => void;
 }
 
 const REFINEMENT_PRESETS = [
@@ -48,6 +55,7 @@ const TONES: EmailTone[] = [
 
 export function MessageBubble({
   message,
+  isLoading = false,
   onRetry,
   onQuickPrompt,
   onUpdateMessageDraft,
@@ -71,40 +79,64 @@ export function MessageBubble({
   const initialSubject = match && match.index !== undefined ? match[1].trim().replace(/^\*+|\*+$/g, '') : '';
   const initialBody = match && match.index !== undefined ? content.substring(match.index + match[0].length).trim() : '';
 
-  // Local draft revision history stack
-  const [revisions, setRevisions] = useState<DraftRevision[]>(() => [
-    {
-      id: 'rev-0',
-      subject: initialSubject,
-      body: initialBody,
-      timestamp: message.timestamp,
-      label: 'Original Draft',
-    },
-  ]);
-  const [activeRevisionIdx, setActiveRevisionIdx] = useState(0);
+  // Local draft revision history stack preserved from message model
+  const [revisions, setRevisions] = useState<DraftRevision[]>(() => {
+    if (message.revisions && message.revisions.length > 0) {
+      return message.revisions;
+    }
+    return [
+      {
+        id: 'rev-0',
+        subject: initialSubject,
+        body: initialBody,
+        timestamp: message.timestamp,
+        label: 'Original Draft',
+      },
+    ];
+  });
+  const [activeRevisionIdx, setActiveRevisionIdx] = useState(
+    message.currentRevisionIndex !== undefined ? message.currentRevisionIndex : 0
+  );
 
   // Working text currently visible / edited
   const currentRevision = revisions[activeRevisionIdx] || revisions[0];
   const [editedSubject, setEditedSubject] = useState(currentRevision?.subject || initialSubject);
   const [editedBody, setEditedBody] = useState(currentRevision?.body || initialBody);
 
-  // Synchronize when message content updates externally
+  // Synchronize ONLY when message ID changes (switched to another message)
+  const lastMessageIdRef = useRef(message.id);
   useEffect(() => {
-    if (initialSubject || initialBody) {
-      setRevisions([
-        {
-          id: 'rev-0',
-          subject: initialSubject,
-          body: initialBody,
-          timestamp: message.timestamp,
-          label: 'Original Draft',
-        },
-      ]);
-      setActiveRevisionIdx(0);
-      setEditedSubject(initialSubject);
-      setEditedBody(initialBody);
+    if (lastMessageIdRef.current !== message.id) {
+      lastMessageIdRef.current = message.id;
+      const initial =
+        message.revisions && message.revisions.length > 0
+          ? message.revisions
+          : [
+              {
+                id: 'rev-0',
+                subject: initialSubject,
+                body: initialBody,
+                timestamp: message.timestamp,
+                label: 'Original Draft',
+              },
+            ];
+      setRevisions(initial);
+      const idx =
+        message.currentRevisionIndex !== undefined
+          ? message.currentRevisionIndex
+          : initial.length - 1;
+      setActiveRevisionIdx(idx);
+      setEditedSubject(initial[idx]?.subject || initialSubject);
+      setEditedBody(initial[idx]?.body || initialBody);
     }
-  }, [content, initialSubject, initialBody, message.timestamp]);
+  }, [
+    message.id,
+    message.revisions,
+    message.currentRevisionIndex,
+    initialSubject,
+    initialBody,
+    message.timestamp,
+  ]);
 
   // Click outside to close tone dropdown
   useEffect(() => {
@@ -132,10 +164,11 @@ export function MessageBubble({
             <div className="mt-3 pt-2.5 border-t border-red-900/40 flex justify-end">
               <button
                 onClick={onRetry}
-                className="flex items-center gap-1.5 text-xs font-mono font-medium text-red-300 hover:text-white bg-red-950/60 hover:bg-red-900/60 px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-red-800/40"
+                disabled={isLoading}
+                className="flex items-center gap-1.5 text-xs font-mono font-medium text-red-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-red-950/60 hover:bg-red-900/60 px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-red-800/40"
               >
-                <RotateCcw className="w-3 h-3" />
-                <span>Retry Generation</span>
+                <RotateCcw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>{isLoading ? 'Retrying...' : 'Retry Generation'}</span>
               </button>
             </div>
           )}
@@ -196,19 +229,27 @@ export function MessageBubble({
           label: `Edit v${revisions.length + 1}`,
         };
         const updated = [...revisions, newRev];
+        const newIdx = updated.length - 1;
         setRevisions(updated);
-        setActiveRevisionIdx(updated.length - 1);
-        onUpdateMessageDraft?.(message.id, rawSubject, emailBody);
+        setActiveRevisionIdx(newIdx);
+        onUpdateMessageDraft?.(message.id, rawSubject, emailBody, updated, newIdx);
       }
     };
 
     // Undo / restore previous version
     const handleUndo = () => {
-      if (activeRevisionIdx > 0) {
+      if (activeRevisionIdx > 0 && !isLoading) {
         const prevIdx = activeRevisionIdx - 1;
         setActiveRevisionIdx(prevIdx);
         setEditedSubject(revisions[prevIdx].subject);
         setEditedBody(revisions[prevIdx].body);
+        onUpdateMessageDraft?.(
+          message.id,
+          revisions[prevIdx].subject,
+          revisions[prevIdx].body,
+          revisions,
+          prevIdx
+        );
       }
     };
 
@@ -268,7 +309,8 @@ export function MessageBubble({
                     <button
                       type="button"
                       onClick={handleUndo}
-                      className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-white bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                      disabled={isLoading}
+                      className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] px-1.5 py-0.5 rounded transition-colors cursor-pointer"
                       title="Undo to previous revision"
                     >
                       <RotateCcw className="w-2.5 h-2.5" />
@@ -451,7 +493,8 @@ export function MessageBubble({
                     key={idx}
                     type="button"
                     onClick={() => onQuickPrompt(item.prompt)}
-                    className="text-[11px] font-mono text-zinc-400 hover:text-white bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
+                    disabled={isLoading}
+                    className="text-[11px] font-mono text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
                   >
                     <span>{item.label}</span>
                   </button>
@@ -464,7 +507,8 @@ export function MessageBubble({
                   <button
                     type="button"
                     onClick={() => setToneDropdownOpen(!toneDropdownOpen)}
-                    className="flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
+                    disabled={isLoading}
+                    className="flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
                     title="Change Tone of this draft"
                   >
                     <Sliders className="w-2.5 h-2.5 text-cyan-400" />
@@ -481,11 +525,12 @@ export function MessageBubble({
                         <button
                           key={tone}
                           type="button"
+                          disabled={isLoading}
                           onClick={() => {
                             setToneDropdownOpen(false);
                             onQuickPrompt(`Rewrite this email draft adopting a ${tone.toLowerCase()} tone.`);
                           }}
-                          className="w-full text-left rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 hover:bg-white/[0.05] hover:text-white transition-colors cursor-pointer"
+                          className="w-full text-left rounded-lg px-2 py-1 text-xs font-mono text-zinc-300 hover:bg-white/[0.05] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                         >
                           {tone}
                         </button>
@@ -497,10 +542,11 @@ export function MessageBubble({
                 <button
                   type="button"
                   onClick={() => onQuickPrompt('Regenerate an alternative version of this email draft.')}
-                  className="flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
+                  disabled={isLoading}
+                  className="flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
                   title="Regenerate alternative draft"
                 >
-                  <RefreshCw className="w-2.5 h-2.5 text-cyan-400" />
+                  <RefreshCw className={`w-2.5 h-2.5 text-cyan-400 ${isLoading ? 'animate-spin' : ''}`} />
                   <span>Regenerate</span>
                 </button>
               </div>

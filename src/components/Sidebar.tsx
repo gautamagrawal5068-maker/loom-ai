@@ -17,6 +17,7 @@ import {
 import { Conversation, UserProfile } from '@/types';
 import { Logo } from '@/components/Logo';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { clearUserDataOnLogout } from '@/lib/storage';
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -98,13 +99,7 @@ export function Sidebar({
         const supabase = createClient();
         await supabase.auth.signOut();
       }
-      if (typeof document !== 'undefined') {
-        document.cookie = 'loom_onboarding_completed=; path=/; max-age=0; SameSite=Lax';
-      }
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem('loom_onboarding_completed');
-        localStorage.removeItem('loom-ai-active-conversation');
-      }
+      clearUserDataOnLogout();
     } catch (err) {
       console.warn('Sign out warning:', err);
     } finally {

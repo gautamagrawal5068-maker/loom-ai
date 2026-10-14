@@ -8,16 +8,21 @@ export async function POST(request: NextRequest) {
         const supabase = await createClient();
         const {
           data: { user },
+          error: authError,
         } = await supabase.auth.getUser();
 
-        if (!user && process.env.NODE_ENV === 'production' && process.env.REQUIRE_AUTH === 'true') {
+        if (authError || !user) {
           return NextResponse.json(
             { error: 'Unauthorized: Please sign in to use LOOM AI.' },
             { status: 401 }
           );
         }
       } catch (authErr) {
-        console.warn('Session verification warning:', authErr);
+        console.error('Session verification error:', authErr);
+        return NextResponse.json(
+          { error: 'Unauthorized: Please sign in to use LOOM AI.' },
+          { status: 401 }
+        );
       }
     }
 

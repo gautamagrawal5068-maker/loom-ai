@@ -123,6 +123,7 @@ export default function WorkspacePage() {
       <TemplatesModal
         isOpen={templatesModalOpen}
         onClose={() => setTemplatesModalOpen(false)}
+        isLoading={isLoading}
         onSelectTemplate={(templatePrompt) => {
           setActiveInitialPrompt(templatePrompt);
         }}
@@ -133,6 +134,7 @@ export default function WorkspacePage() {
         isOpen={replyModalOpen}
         onClose={() => setReplyModalOpen(false)}
         initialTab={replyModalInitialTab}
+        isLoading={isLoading}
         onGenerateDraft={(prompt, context) => {
           sendMessage(prompt, context);
         }}

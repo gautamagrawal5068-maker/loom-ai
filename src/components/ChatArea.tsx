@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Menu, Sparkles, Activity, ChevronDown, Check, Brain } from 'lucide-react';
-import { Conversation, EmailTone, ModelTier, UsageStats, MAX_CONTEXT_WINDOW_TOKENS } from '@/types';
+import { Conversation, EmailTone, ModelTier, UsageStats, MAX_CONTEXT_WINDOW_TOKENS, DraftRevision } from '@/types';
 import { calculateConversationContextUsage } from '@/lib/contextDetection';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { WelcomeScreen } from './WelcomeScreen';
@@ -28,7 +28,13 @@ interface ChatAreaProps {
   onOpenSummarizeModal?: () => void;
   remainingTokens?: number;
   tokensCountdown?: string | null;
-  onUpdateMessageDraft?: (messageId: string, subject: string, body: string) => void;
+  onUpdateMessageDraft?: (
+    messageId: string,
+    subject: string,
+    body: string,
+    revisions?: DraftRevision[],
+    revisionIdx?: number
+  ) => void;
   activeInitialPrompt?: string;
 }
 
@@ -246,6 +252,7 @@ export function ChatArea({
           {!hasMessages ? (
             <WelcomeScreen
               userName={userName}
+              isLoading={isLoading}
               onSuggestionClick={(prompt) => onSendMessage(prompt)}
               onOpenStyleModal={onOpenStyleModal}
               hasStyleSample={hasStyleSample}
@@ -259,6 +266,7 @@ export function ChatArea({
                 <MessageBubble
                   key={message.id}
                   message={message}
+                  isLoading={isLoading}
                   onRetry={onRetry}
                   onQuickPrompt={(prompt) => onSendMessage(prompt)}
                   onUpdateMessageDraft={onUpdateMessageDraft}
