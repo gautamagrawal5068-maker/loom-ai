@@ -2,18 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Logo } from '@/components/Logo';
-import {
-  Sparkles,
-  ArrowRight,
-  Sliders,
-  ShieldCheck,
-  Check,
-  Copy,
-  ChevronRight,
-  Repeat,
-} from 'lucide-react';
+import { Wordmark } from '@/components/Logo';
+import { ArrowRight, ShieldCheck, Check, Copy } from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { copyToClipboard } from '@/lib/clipboard';
 
 type DemoTone = 'Friendly' | 'Assertive' | 'Formal' | 'Concise' | 'Persuasive' | 'Apologetic';
 
@@ -182,64 +174,52 @@ export default function LandingPage() {
   const wordCount = currentDraft.body.join(' ').split(/\s+/).filter(Boolean).length;
   const readSeconds = Math.max(10, Math.round((wordCount / 200) * 60));
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const text = `Subject: ${currentDraft.subject}\n\n${currentDraft.body.join('\n\n')}`;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (await copyToClipboard(text)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
-  return (
-    <div className="min-h-dvh flex flex-col bg-[#090a0f] text-[#f8fafc] selection:bg-cyan-500/30 selection:text-white relative overflow-hidden font-sans">
-      {/* Subtle Radiant Ambient Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-cyan-500/10 via-purple-500/5 to-transparent blur-3xl pointer-events-none" />
-      <div className="absolute top-[600px] right-1/4 w-[400px] h-[300px] bg-purple-500/5 blur-3xl pointer-events-none" />
 
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-white/[0.08] bg-[#090a0f]/85 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <Logo size="md" />
-            <span className="font-mono text-sm font-semibold tracking-tight text-[#f8fafc] group-hover:text-cyan-300 transition-colors">
-              LOOM.AI
-            </span>
+  const isLoom = viewMode === 'loom';
+
+  return (
+    <div className="min-h-dvh flex flex-col bg-bg text-fg font-sans">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b border-line bg-bg/80 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-4">
+          <Link href="/" aria-label="Loom.ai home" className="shrink-0 rounded-lg">
+            <Wordmark size="md" />
           </Link>
 
-          <nav className="hidden md:flex items-center gap-7 text-xs font-medium text-zinc-400">
-            <a href="#demo" className="hover:text-[#f8fafc] transition-colors">
-              Interactive Demo
+          <nav className="hidden md:flex items-center gap-8 text-sm text-fg-subtle">
+            <a href="#demo" className="py-2 hover:text-fg transition-colors">
+              Interactive demo
             </a>
-            <a href="#features" className="hover:text-[#f8fafc] transition-colors">
+            <a href="#features" className="py-2 hover:text-fg transition-colors">
               Features
             </a>
-            <a href="#security" className="hover:text-[#f8fafc] transition-colors">
+            <a href="#security" className="py-2 hover:text-fg transition-colors">
               Security
             </a>
           </nav>
 
-          <div className="flex items-center gap-3 text-xs font-medium">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {isAuthenticated ? (
-              <Link
-                href="/app"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-semibold transition-all shadow-[0_0_15px_rgba(34,211,238,0.25)]"
-              >
-                <span>Open Workspace</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+              <Link href="/app" className="btn btn-primary">
+                <span>Open workspace</span>
+                <ArrowRight className="size-4" />
               </Link>
             ) : (
               <>
-                <Link
-                  href="/auth"
-                  className="px-3.5 py-2 rounded-xl text-zinc-400 hover:text-[#f8fafc] transition-colors"
-                >
-                  Sign In
+                <Link href="/auth" className="btn btn-ghost">
+                  Sign in
                 </Link>
-                <Link
-                  href="/app"
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-semibold transition-all shadow-[0_0_15px_rgba(34,211,238,0.25)]"
-                >
-                  <span>Start Writing</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
+                <Link href="/app" className="btn btn-primary">
+                  <span>Start writing</span>
+                  <ArrowRight className="size-4 hidden sm:block" />
                 </Link>
               </>
             )}
@@ -247,331 +227,278 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative z-10 pt-16 sm:pt-24 pb-16 px-4 sm:px-6 max-w-5xl mx-auto w-full text-center flex flex-col items-center">
-        {/* Brand Tagline Badge */}
-        <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-white/[0.08] bg-[#0d0f17] text-zinc-300 text-xs font-mono mb-6 backdrop-blur-md shadow-sm">
-          <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
-          <span>Personalized Email Intelligence • Zero AI Clichés</span>
-        </div>
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="px-5 sm:px-8 pt-20 sm:pt-28 lg:pt-36 pb-20 sm:pb-24">
+          <div className="max-w-5xl mx-auto flex flex-col items-center text-center animate-fade-up">
+            <p className="eyebrow">Personal email intelligence</p>
 
-        {/* Main Headline */}
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-[#f8fafc] max-w-4xl leading-[1.08]">
-          Your emails, written the way{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#f8fafc] via-[#cbd5e1] to-cyan-400">
-            you would write them.
-          </span>
-        </h1>
+            <h1 className="mt-5 font-display font-normal tracking-tight text-fg text-5xl sm:text-6xl lg:text-[76px] leading-[1.02] max-w-4xl">
+              Your emails, written the way{' '}
+              <em className="font-display italic text-accent-strong">you would write them.</em>
+            </h1>
 
-        {/* Subtitle */}
-        <p className="mt-6 text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          LOOM AI studies your natural phrasing, vocabulary habits, and cadence to compose
-          flawless, authentic emails across any tone.
-        </p>
+            <p className="mt-7 text-lg leading-relaxed text-fg-muted max-w-xl">
+              LOOM AI studies your natural phrasing, vocabulary habits, and cadence to compose
+              authentic emails in any tone, without the robotic clichés.
+            </p>
 
-        {/* CTA Buttons */}
-        <div className="mt-9 flex flex-col sm:flex-row items-center gap-3.5 w-full sm:w-auto">
-          <Link
-            href="/app"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-semibold text-sm transition-all shadow-[0_0_20px_rgba(34,211,238,0.25)]"
-          >
-            <span>{isAuthenticated ? 'Enter Workspace' : 'Start Writing Free'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+            <div className="mt-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+              <Link href="/app" className="btn btn-primary btn-lg">
+                <span>{isAuthenticated ? 'Enter workspace' : 'Start writing free'}</span>
+                <ArrowRight className="size-4" />
+              </Link>
+              <a href="#demo" className="btn btn-secondary btn-lg">
+                Compare AI styles
+              </a>
+            </div>
 
-          <a
-            href="#demo"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-white/[0.08] bg-[#0d0f17] hover:bg-[#121520] hover:border-white/[0.15] text-zinc-300 hover:text-[#f8fafc] font-medium text-sm transition-all shadow-xs"
-          >
-            <span>Compare AI Styles</span>
-          </a>
-        </div>
-
-        {/* Trust Badges */}
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs text-zinc-400 font-medium">
-          <span className="flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 text-cyan-400" /> Learns from your writing style
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 text-cyan-400" /> 6 calibrated email tones
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 text-cyan-400" /> Secure PostgreSQL & RLS
-          </span>
-        </div>
-      </section>
-
-      {/* Interactive Live Email Demo */}
-      <section id="demo" className="relative z-10 py-16 px-4 sm:px-6 max-w-4xl mx-auto w-full">
-        <div className="text-center mb-8">
-          <div className="inline-block font-mono text-[11px] font-semibold text-cyan-400 uppercase tracking-widest mb-2">
-            Interactive Experience
+            <ul className="mt-12 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-fg-subtle">
+              <li className="inline-flex items-center gap-1.5">
+                <Check className="size-3.5 text-fg-faint" />
+                Learns from your writing style
+              </li>
+              <li aria-hidden="true" className="hidden sm:block text-fg-faint">·</li>
+              <li className="inline-flex items-center gap-1.5">
+                <Check className="size-3.5 text-fg-faint" />
+                6 calibrated email tones
+              </li>
+              <li aria-hidden="true" className="hidden sm:block text-fg-faint">·</li>
+              <li className="inline-flex items-center gap-1.5">
+                <Check className="size-3.5 text-fg-faint" />
+                Secure PostgreSQL &amp; RLS
+              </li>
+            </ul>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#f8fafc]">
-            See how LOOM AI calibrates tone
-          </h2>
-          <p className="text-sm text-zinc-400 mt-2 max-w-lg mx-auto">
-            Switch tones and toggle between generic AI and LOOM to see how robotic slop transforms into clean human writing.
-          </p>
-        </div>
+        </section>
 
-        {/* Interactive Comparison Mode Toggle */}
-        <div className="flex items-center justify-center mb-5">
-          <div className="p-1 rounded-xl bg-[#0d0f17] border border-white/[0.08] flex items-center gap-1 shadow-lg">
-            <button
-              onClick={() => setViewMode('loom')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
-                viewMode === 'loom'
-                  ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                  : 'text-zinc-400 hover:text-[#f8fafc]'
+        {/* Interactive demo */}
+        <section id="demo" className="scroll-mt-16 px-5 sm:px-8 py-20 sm:py-24">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center">
+              <p className="eyebrow">Interactive demo</p>
+              <h2 className="mt-3 font-display font-normal tracking-tight text-fg text-3xl sm:text-4xl">
+                See how LOOM&nbsp;AI calibrates tone
+              </h2>
+              <p className="mt-4 text-[15px] leading-relaxed text-fg-muted max-w-lg mx-auto">
+                Switch tones, then compare generic AI with LOOM to see robotic filler turn into
+                clean, human writing.
+              </p>
+            </div>
+
+            {/* Mode toggle */}
+            <div className="mt-10 flex justify-center">
+              <div className="inline-flex p-1 rounded-full bg-panel border border-line" role="group" aria-label="Draft source">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('loom')}
+                  aria-pressed={isLoom}
+                  className={`h-8 px-3.5 rounded-full text-sm transition-colors ${
+                    isLoom ? 'bg-raised text-fg shadow-sm' : 'text-fg-subtle hover:text-fg'
+                  }`}
+                >
+                  LOOM AI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('generic')}
+                  aria-pressed={!isLoom}
+                  className={`h-8 px-3.5 rounded-full text-sm transition-colors ${
+                    !isLoom ? 'bg-raised text-fg shadow-sm' : 'text-fg-subtle hover:text-fg'
+                  }`}
+                >
+                  Generic AI
+                </button>
+              </div>
+            </div>
+
+            {/* Tone chips */}
+            <div className="mt-5 flex items-center justify-center gap-2 flex-wrap">
+              {(['Friendly', 'Assertive', 'Formal', 'Concise', 'Persuasive', 'Apologetic'] as DemoTone[]).map((tone) => (
+                <button
+                  key={tone}
+                  type="button"
+                  onClick={() => setActiveTone(tone)}
+                  data-active={activeTone === tone}
+                  aria-pressed={activeTone === tone}
+                  className="chip"
+                >
+                  {tone}
+                </button>
+              ))}
+            </div>
+
+            {/* Email card */}
+            <div
+              className={`card mt-8 rounded-2xl overflow-hidden transition-colors ${
+                isLoom ? '' : 'border-danger-line'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>LOOM AI (Humanized)</span>
-            </button>
-            <button
-              onClick={() => setViewMode('generic')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
-                viewMode === 'generic'
-                  ? 'bg-red-950/40 text-red-300 border border-red-500/40 shadow-xs'
-                  : 'text-zinc-400 hover:text-[#f8fafc]'
-              }`}
-            >
-              <span>Generic AI (Robotic Clichés)</span>
-            </button>
-          </div>
-        </div>
+              {/* Top bar */}
+              <div className="bg-panel border-b border-line px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0">
+                  <span className="text-sm text-fg-subtle whitespace-nowrap">
+                    Tone · <span className="text-fg">{activeTone}</span>
+                  </span>
+                  <span
+                    className={`badge whitespace-nowrap ${
+                      isLoom ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+                    }`}
+                  >
+                    {isLoom ? 'Cliché score 0% · human' : 'Cliché score 88% · AI slop'}
+                  </span>
+                </div>
 
-        {/* Tone Selector Pills (All 6 Tones) */}
-        <div className="flex items-center justify-center gap-1.5 mb-6 flex-wrap">
-          {(['Friendly', 'Assertive', 'Formal', 'Concise', 'Persuasive', 'Apologetic'] as DemoTone[]).map((tone) => (
-            <button
-              key={tone}
-              onClick={() => setActiveTone(tone)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer ${
-                activeTone === tone
-                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/50 shadow-[0_0_16px_rgba(6,182,212,0.2)] scale-102'
-                  : 'bg-[#0d0f17] text-zinc-400 border border-white/[0.08] hover:border-white/[0.15] hover:text-[#f8fafc]'
-              }`}
-            >
-              {tone}
-            </button>
-          ))}
-        </div>
-
-        {/* Premium Email Card Container */}
-        <div className={`rounded-2xl border transition-all overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] ${
-          viewMode === 'loom'
-            ? 'border-white/[0.08] bg-[#0d0f17]'
-            : 'border-red-900/40 bg-[#160d0e]'
-        }`}>
-          {/* Email Client Top Bar */}
-          <div className="bg-[#090a0f] border-b border-white/[0.08] px-5 py-3 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="hidden sm:inline font-mono text-xs text-fg-subtle whitespace-nowrap">
+                    {wordCount} words · ~{readSeconds}s
+                  </span>
+                  <button type="button" onClick={handleCopy} className="btn btn-sm btn-ghost">
+                    {copied ? (
+                      <>
+                        <Check className="size-3.5 text-success" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="size-3.5" />
+                        <span>Copy draft</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-              <span className="text-xs font-mono text-zinc-400 ml-1">
-                Tone: <strong className="text-[#f8fafc]">{activeTone}</strong>
-              </span>
 
-              {/* Metric Badge */}
-              <span className={`text-[11px] font-mono px-2 py-0.5 rounded-md border ${
-                viewMode === 'loom'
-                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30'
-                  : 'bg-red-950/40 text-red-400 border-red-500/30'
-              }`}>
-                {viewMode === 'loom' ? 'Cliché Score: 0% (Human)' : 'Cliché Score: 88% (AI Slop)'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs font-mono text-zinc-500">
-              <span className="hidden sm:inline">{wordCount} words • ~{readSeconds}s</span>
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] rounded-lg px-3 py-1 transition-all cursor-pointer shadow-xs"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>Copy Draft</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Email Headers */}
-          <div className="px-6 py-3.5 border-b border-white/[0.08] bg-white/[0.01] space-y-2 text-xs font-mono">
-            <div className="flex items-center">
-              <span className="w-16 text-zinc-500">To:</span>
-              <span className="text-zinc-300">{currentDraft.recipient}</span>
-            </div>
-            <div className="flex items-baseline">
-              <span className="w-16 text-zinc-500">Subject:</span>
-              <span className={`font-semibold ${viewMode === 'loom' ? 'text-[#f8fafc]' : 'text-red-200'}`}>
-                {currentDraft.subject}
-              </span>
-            </div>
-          </div>
-
-          {/* Email Body Content */}
-          <div className="p-6 sm:p-8 text-sm text-zinc-300 leading-relaxed space-y-4 font-sans">
-            {currentDraft.body.map((paragraph, index) => (
-              <p key={index} className={viewMode === 'generic' ? 'text-red-200/90' : 'text-zinc-300'}>
-                {paragraph}
-              </p>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Bento Feature Grid */}
-      <section id="features" className="relative z-10 py-20 px-4 sm:px-6 max-w-6xl mx-auto w-full">
-        <div className="text-center mb-14">
-          <div className="inline-block font-mono text-[11px] font-semibold text-cyan-400 uppercase tracking-widest mb-2">
-            Engineered For Excellence
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#f8fafc]">
-            Everything you need to write like a pro
-          </h2>
-          <p className="text-sm text-zinc-400 mt-2.5 max-w-xl mx-auto">
-            Built from scratch to give founders, executives, and professionals total confidence in their outbound communication.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Feature 1 */}
-          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0f17] hover:border-white/[0.15] transition-all flex flex-col justify-between shadow-xs">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mb-5">
-                <Sparkles className="w-5 h-5" />
+              {/* Headers */}
+              <div className="px-5 sm:px-8 py-4 border-b border-line space-y-2 text-sm">
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="w-16 shrink-0 text-fg-subtle">To</span>
+                  <span className="text-fg-muted min-w-0 break-words">{currentDraft.recipient}</span>
+                </div>
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="w-16 shrink-0 text-fg-subtle">Subject</span>
+                  <span className={`font-medium min-w-0 ${isLoom ? 'text-fg' : 'text-danger/85'}`}>
+                    {currentDraft.subject}
+                  </span>
+                </div>
               </div>
-              <h3 className="text-base font-bold text-[#f8fafc] mb-2">
-                Personal Style Mirror
-              </h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Paste an example of your past emails. LOOM AI analyzes your typical sentence lengths, vocabulary choices, sign-offs, and greeting habits so every output sounds genuinely yours.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-zinc-500 font-mono">
-              Zero robotic AI clichés
-            </div>
-          </div>
 
-          {/* Feature 2 */}
-          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0f17] hover:border-white/[0.15] transition-all flex flex-col justify-between shadow-xs">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mb-5">
-                <Sliders className="w-5 h-5" />
+              {/* Body */}
+              <div className="px-5 sm:px-8 py-6 sm:py-8 space-y-4 text-[15px] leading-7 text-fg-muted">
+                {currentDraft.body.map((paragraph, index) => (
+                  <p key={index}>{paragraph}</p>
+                ))}
               </div>
-              <h3 className="text-base font-bold text-[#f8fafc] mb-2">
-                6 Dynamic Tone Presets
-              </h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Formal, Friendly, Assertive, Apologetic, Concise, or Persuasive. Adapt instantly whether you are emailing a Fortune 500 board or pinging a teammate on Slack.
-              </p>
-            </div>
-            <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-zinc-500 font-mono">
-              One-click tone calibration
             </div>
           </div>
+        </section>
 
-          {/* Feature 3 */}
-          <div className="p-7 rounded-2xl border border-white/[0.08] bg-[#0d0f17] hover:border-white/[0.15] transition-all flex flex-col justify-between shadow-xs">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mb-5">
-                <Repeat className="w-5 h-5" />
+        {/* Features */}
+        <section id="features" className="scroll-mt-16 px-5 sm:px-8 py-20 sm:py-24">
+          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-[5fr_7fr] gap-10 md:gap-16">
+            <div className="md:sticky md:top-28 md:self-start">
+              <p className="eyebrow">Features</p>
+              <h2 className="mt-3 font-display font-normal tracking-tight text-fg text-3xl sm:text-4xl">
+                Everything you need to write like a pro
+              </h2>
+              <p className="mt-4 text-[15px] leading-relaxed text-fg-muted max-w-md">
+                Built from scratch to give founders, executives, and professionals total confidence in
+                their outbound communication.
+              </p>
+            </div>
+
+            <ol className="border-b border-line">
+              <li className="grid grid-cols-[2.5rem_1fr] gap-x-2 border-t border-line py-8">
+                <span className="font-mono text-xs text-fg-faint pt-1">01</span>
+                <div>
+                  <h3 className="text-base font-semibold text-fg">Personal style mirror</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-fg-muted">
+                    Paste an example of your past emails. LOOM AI analyzes your typical sentence lengths,
+                    vocabulary choices, sign-offs, and greeting habits so every output sounds genuinely yours.
+                  </p>
+                  <p className="mt-3 text-sm text-fg-subtle">Zero robotic AI clichés</p>
+                </div>
+              </li>
+              <li className="grid grid-cols-[2.5rem_1fr] gap-x-2 border-t border-line py-8">
+                <span className="font-mono text-xs text-fg-faint pt-1">02</span>
+                <div>
+                  <h3 className="text-base font-semibold text-fg">6 dynamic tone presets</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-fg-muted">
+                    Formal, Friendly, Assertive, Apologetic, Concise, or Persuasive. Adapt instantly whether
+                    you are emailing a Fortune 500 board or pinging a teammate on Slack.
+                  </p>
+                  <p className="mt-3 text-sm text-fg-subtle">One-click tone calibration</p>
+                </div>
+              </li>
+              <li className="grid grid-cols-[2.5rem_1fr] gap-x-2 border-t border-line py-8">
+                <span className="font-mono text-xs text-fg-faint pt-1">03</span>
+                <div>
+                  <h3 className="text-base font-semibold text-fg">Multi-turn iteration</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-fg-muted">
+                    Never start over. Ask LOOM to “make it punchier”, “soften the deadline ask”, or “add a
+                    bulleted roadmap” while preserving full conversational context up to 100k tokens.
+                  </p>
+                  <p className="mt-3 text-sm text-fg-subtle">Claude &amp; ChatGPT style 100k context window</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        {/* Security */}
+        <section id="security" className="scroll-mt-16 px-5 sm:px-8 pb-20 sm:pb-24">
+          <div className="max-w-5xl mx-auto rounded-2xl border border-line px-6 py-7 sm:px-8 sm:py-8 flex flex-col md:flex-row md:items-center gap-6 md:gap-10">
+            <div className="flex items-start gap-4 flex-1 min-w-0">
+              <ShieldCheck className="size-5 shrink-0 mt-0.5 text-fg-subtle" />
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-fg">
+                  Enterprise data isolation with Row Level Security
+                </h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-fg-muted max-w-2xl">
+                  Your conversations, onboarding parameters, and writing samples are stored in a dedicated
+                  Supabase PostgreSQL database protected by strict Row Level Security (RLS). Your data is
+                  accessible only by your authenticated session.
+                </p>
               </div>
-              <h3 className="text-base font-bold text-[#f8fafc] mb-2">
-                Multi-Turn Iteration
-              </h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Never start over. Ask LOOM to “make it punchier”, “soften the deadline ask”, or “add a bulleted roadmap” while preserving full conversational context up to 100k tokens.
-              </p>
             </div>
-            <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-zinc-500 font-mono">
-              Claude & ChatGPT style 100k context window
-            </div>
+            <Link href="/auth" className="btn btn-secondary shrink-0 self-start md:self-center ml-9 md:ml-0">
+              Create secure account
+            </Link>
           </div>
-        </div>
+        </section>
 
-        {/* Bottom Banner Card */}
-        <div id="security" className="mt-5 p-7 sm:p-9 rounded-2xl border border-white/[0.08] bg-[#0d0f17] flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xs">
-          <div className="flex items-start gap-4">
-            <div className="w-11 h-11 rounded-xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 shrink-0 mt-0.5">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-[#f8fafc] mb-1">
-                Enterprise Data Isolation with Row Level Security
-              </h3>
-              <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
-                Your conversations, onboarding parameters, and writing samples are stored in a dedicated Supabase PostgreSQL database protected by strict Row Level Security (RLS). Your data is accessible only by your authenticated session.
-              </p>
-            </div>
+        {/* Final call to action */}
+        <section className="px-5 sm:px-8">
+          <div className="max-w-5xl mx-auto border-t border-line py-24 sm:py-28 text-center flex flex-col items-center">
+            <h2 className="font-display font-normal tracking-tight text-fg text-4xl sm:text-5xl max-w-2xl">
+              Start writing natural emails today
+            </h2>
+            <p className="mt-4 text-[15px] leading-relaxed text-fg-muted max-w-md">
+              Join professionals who save hours every week while sounding more like themselves.
+            </p>
+            <Link href="/app" className="btn btn-primary btn-lg mt-9">
+              <span>{isAuthenticated ? 'Go to workspace' : 'Get started with LOOM AI'}</span>
+              <ArrowRight className="size-4" />
+            </Link>
           </div>
-
-          <Link
-            href="/auth"
-            className="shrink-0 px-5 py-2.5 rounded-xl bg-[#121520] hover:bg-[#181d2d] border border-white/[0.08] text-xs font-semibold text-[#f8fafc] transition-all shadow-xs"
-          >
-            Create Secure Account
-          </Link>
-        </div>
-      </section>
-
-      {/* Final Call to Action */}
-      <section className="relative z-10 py-20 px-4 sm:px-6 max-w-3xl mx-auto w-full text-center">
-        <div className="p-10 sm:p-14 rounded-3xl border border-white/[0.08] bg-[#0d0f17] shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-cyan-500/10 blur-3xl pointer-events-none" />
-
-          <div className="w-12 h-12 rounded-2xl bg-[#121520] border border-white/[0.08] flex items-center justify-center text-cyan-400 mx-auto mb-6 shadow-md">
-            <Sparkles className="w-6 h-6 text-cyan-400" />
-          </div>
-
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#f8fafc] mb-3">
-            Start writing natural emails today
-          </h2>
-          <p className="text-sm text-zinc-400 max-w-md mx-auto mb-8 leading-relaxed">
-            Join professionals who save hours every week while sounding more authentic than ever.
-          </p>
-
-          <Link
-            href="/app"
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-semibold text-sm transition-all shadow-[0_0_20px_rgba(34,211,238,0.25)]"
-          >
-            <span>{isAuthenticated ? 'Go to Workspace' : 'Get Started with LOOM AI'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </section>
+        </section>
+      </main>
 
       {/* Footer */}
-      <footer className="w-full border-t border-white/[0.08] py-8 px-4 sm:px-6 relative z-10 bg-[#090a0f]">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
-          <div className="flex items-center gap-2.5">
-            <Logo size="sm" />
-            <span className="font-mono text-[#f8fafc] font-semibold">LOOM.AI</span>
-          </div>
+      <footer className="w-full border-t border-line">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-fg-subtle">
+          <Wordmark size="sm" />
 
-          <p>© 2026 LOOM AI. Your emails, written the way you would write them.</p>
+          <p className="text-center md:text-left">© 2026 LOOM AI. Your emails, written the way you would write them.</p>
 
           <div className="flex items-center gap-5">
-            <Link href="/auth" className="hover:text-[#f8fafc] transition-colors">
-              Sign In
+            <Link href="/auth" className="inline-flex items-center min-h-9 hover:text-fg transition-colors">
+              Sign in
             </Link>
-            <Link href="/onboarding" className="hover:text-[#f8fafc] transition-colors">
+            <Link href="/onboarding" className="inline-flex items-center min-h-9 hover:text-fg transition-colors">
               Onboarding
             </Link>
-            <Link href="/app" className="hover:text-[#f8fafc] transition-colors">
+            <Link href="/app" className="inline-flex items-center min-h-9 hover:text-fg transition-colors">
               Workspace
             </Link>
           </div>

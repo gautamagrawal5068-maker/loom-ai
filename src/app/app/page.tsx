@@ -62,7 +62,7 @@ export default function WorkspacePage() {
     (profile?.style_sample?.trim().length ?? 0) > 0;
 
   return (
-    <div className="h-dvh flex overflow-hidden bg-[#090a0f] font-sans antialiased text-[#f8fafc]">
+    <div className="h-dvh flex overflow-hidden bg-bg font-sans antialiased text-fg">
       {/* Sidebar navigation */}
       <Sidebar
         conversations={conversations}
@@ -125,7 +125,9 @@ export default function WorkspacePage() {
         onClose={() => setTemplatesModalOpen(false)}
         isLoading={isLoading}
         onSelectTemplate={(templatePrompt) => {
-          setActiveInitialPrompt(templatePrompt);
+          // Reset first so picking the same template again still refills the composer.
+          setActiveInitialPrompt(undefined);
+          setTimeout(() => setActiveInitialPrompt(templatePrompt), 0);
         }}
       />
 

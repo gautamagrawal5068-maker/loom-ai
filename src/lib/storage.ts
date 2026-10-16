@@ -18,13 +18,53 @@ const ACTIVE_TONE_KEY = 'loom-ai-active-tone';
 
 const DELETED_CONVERSATIONS_KEY = 'loom-ai-deleted-conversations';
 
+const VALID_TONES: readonly EmailTone[] = ['Formal', 'Friendly', 'Assertive', 'Apologetic', 'Concise', 'Persuasive'];
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Drops structurally invalid entries from persisted conversations so corrupted or
+ * legacy localStorage data can't crash consumers (e.g. `c.messages.map`).
+ */
+function sanitizeConversations(raw: unknown): Conversation[] {
+  if (!Array.isArray(raw)) return [];
+  const result: Conversation[] = [];
+  for (const item of raw) {
+    if (!isPlainObject(item) || typeof item.id !== 'string' || !item.id) continue;
+    const messages = Array.isArray(item.messages)
+      ? (item.messages as unknown[]).filter(
+          (m): m is Conversation['messages'][number] =>
+            isPlainObject(m) &&
+            typeof m.id === 'string' &&
+            (m.role === 'user' || m.role === 'assistant') &&
+            typeof m.content === 'string'
+        )
+      : [];
+    const now = Date.now();
+    result.push({
+      ...(item as unknown as Conversation),
+      title: typeof item.title === 'string' && item.title ? item.title : 'New Conversation',
+      messages,
+      createdAt: finiteOr(item.createdAt, now),
+      updatedAt: finiteOr(item.updatedAt, finiteOr(item.createdAt, now)),
+    });
+  }
+  return result;
+}
+
 export function loadDeletedConversationIds(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
     const raw = localStorage.getItem(DELETED_CONVERSATIONS_KEY);
     if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    return new Set(Array.isArray(arr) ? arr : []);
+    const arr: unknown = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []);
   } catch {
     return new Set();
   }
@@ -46,7 +86,7 @@ export function loadConversations(): Conversation[] {
   try {
     const data = localStorage.getItem(CONVERSATIONS_KEY);
     if (!data) return [];
-    const convs: Conversation[] = JSON.parse(data);
+    const convs = sanitizeConversations(JSON.parse(data));
     const deletedIds = loadDeletedConversationIds();
     return convs.filter((c) => !deletedIds.has(c.id));
   } catch (error) {
@@ -116,7 +156,7 @@ export function loadActiveTone(): EmailTone | null {
   if (typeof window === 'undefined') return null;
   try {
     const tone = localStorage.getItem(ACTIVE_TONE_KEY);
-    return (tone as EmailTone) || null;
+    return tone && (VALID_TONES as readonly string[]).includes(tone) ? (tone as EmailTone) : null;
   } catch (error) {
     console.error('Failed to load active tone from storage:', error);
     return null;
@@ -154,8 +194,16 @@ export function getTokensCountdownFormatted(): string | null {
   try {
     const stored = localStorage.getItem(TOKENS_RESET_AT_KEY);
     if (!stored) return null;
-    const resetAt = parseInt(stored, 10);
-    if (isNaN(resetAt)) return null;
+    let resetAt = parseInt(stored, 10);
+    if (isNaN(resetAt)) {
+      localStorage.removeItem(TOKENS_RESET_AT_KEY);
+      return null;
+    }
+    // A refill is never more than one cycle away; clamp corrupted/far-future values.
+    if (resetAt - Date.now() > REFILL_CYCLE_MS) {
+      resetAt = Date.now() + REFILL_CYCLE_MS;
+      localStorage.setItem(TOKENS_RESET_AT_KEY, resetAt.toString());
+    }
 
     if (Date.now() >= resetAt) {
       // 5 hours have passed: auto-refill to 50k and reset timer!
@@ -206,6 +254,14 @@ export function loadMessagingTokens(): number {
       localStorage.setItem(MESSAGING_TOKENS_KEY, DEFAULT_MESSAGING_TOKENS.toString());
       return DEFAULT_MESSAGING_TOKENS;
     }
+    if (parsed <= 0) {
+      // Exhausted quota must always have a refill deadline; otherwise it stays at 0 forever.
+      if (!resetAt || isNaN(resetAt)) {
+        localStorage.setItem(MESSAGING_TOKENS_KEY, '0');
+        localStorage.setItem(TOKENS_RESET_AT_KEY, (Date.now() + REFILL_CYCLE_MS).toString());
+      }
+      return 0;
+    }
     return parsed;
   } catch (error) {
     console.error('Failed to load messaging tokens:', error);
@@ -216,7 +272,7 @@ export function loadMessagingTokens(): number {
 export function saveMessagingTokens(tokens: number): void {
   if (typeof window === 'undefined') return;
   try {
-    const clamped = Math.max(0, tokens);
+    const clamped = Number.isFinite(tokens) ? Math.max(0, Math.floor(tokens)) : DEFAULT_MESSAGING_TOKENS;
     localStorage.setItem(MESSAGING_TOKENS_KEY, clamped.toString());
 
     // Strict rule: 5-hour countdown begins ONLY when tokens reach 0!
@@ -299,11 +355,12 @@ export function loadWritingProfile(): WritingProfile {
         styleSample: existingSample,
       };
     }
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_WRITING_PROFILE,
-      ...parsed,
-    };
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPlainObject(parsed)) return { ...DEFAULT_WRITING_PROFILE, styleSample: loadStyleSample() };
+    const merged = { ...DEFAULT_WRITING_PROFILE, ...(parsed as Partial<WritingProfile>) };
+    if (typeof merged.styleSample !== 'string') merged.styleSample = '';
+    if (merged.defaultTone && !VALID_TONES.includes(merged.defaultTone)) merged.defaultTone = null;
+    return merged;
   } catch (err) {
     console.error('Failed to load writing profile from storage:', err);
     return DEFAULT_WRITING_PROFILE;
@@ -342,10 +399,16 @@ export function loadUsageStats(): UsageStats {
   try {
     const raw = localStorage.getItem(USAGE_STATS_KEY);
     if (!raw) return DEFAULT_USAGE_STATS;
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPlainObject(parsed)) return DEFAULT_USAGE_STATS;
     return {
-      ...DEFAULT_USAGE_STATS,
-      ...parsed,
+      totalRequests: finiteOr(parsed.totalRequests, 0),
+      totalInputTokens: finiteOr(parsed.totalInputTokens, 0),
+      totalOutputTokens: finiteOr(parsed.totalOutputTokens, 0),
+      totalTokens: finiteOr(parsed.totalTokens, 0),
+      estimatedCostUsd: finiteOr(parsed.estimatedCostUsd, 0),
+      lastModelUsed:
+        typeof parsed.lastModelUsed === 'string' ? parsed.lastModelUsed : DEFAULT_USAGE_STATS.lastModelUsed,
     };
   } catch (err) {
     console.error('Failed to load usage stats:', err);
@@ -359,17 +422,19 @@ export function recordUsage(usage: TokenUsage): UsageStats {
     const current = loadUsageStats();
     const updated: UsageStats = {
       totalRequests: current.totalRequests + 1,
-      totalInputTokens: current.totalInputTokens + usage.promptTokens,
-      totalOutputTokens: current.totalOutputTokens + usage.candidatesTokens,
-      totalTokens: current.totalTokens + usage.totalTokens,
-      estimatedCostUsd: Math.round((current.estimatedCostUsd + usage.estimatedCostUsd) * 1_000_000) / 1_000_000,
-      lastModelUsed: usage.model,
+      // Guard against missing/non-numeric fields so one bad response can't poison totals with NaN
+      totalInputTokens: current.totalInputTokens + finiteOr(usage.promptTokens, 0),
+      totalOutputTokens: current.totalOutputTokens + finiteOr(usage.candidatesTokens, 0),
+      totalTokens: current.totalTokens + finiteOr(usage.totalTokens, 0),
+      estimatedCostUsd:
+        Math.round((current.estimatedCostUsd + finiteOr(usage.estimatedCostUsd, 0)) * 1_000_000) / 1_000_000,
+      lastModelUsed: usage.model || current.lastModelUsed,
     };
     localStorage.setItem(USAGE_STATS_KEY, JSON.stringify(updated));
     return updated;
   } catch (err) {
     console.error('Failed to record token usage:', err);
-    return DEFAULT_USAGE_STATS;
+    return loadUsageStats();
   }
 }
 

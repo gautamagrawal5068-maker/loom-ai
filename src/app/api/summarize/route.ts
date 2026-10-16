@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sanitizeModelOutput } from '@/lib/sanitizer';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+
+const MAX_BODY_BYTES = 200_000;
+const MAX_EMAIL_CHARS = 50_000;
 
 export async function POST(request: NextRequest) {
   try {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    if (isSupabaseConfigured()) {
       try {
         const supabase = await createClient();
         const {
@@ -38,12 +42,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { emailText } = await request.json();
+    const isGeminiNative = apiUrl.includes('generativelanguage.googleapis.com');
+    if (isGeminiNative && !apiKey) {
+      return NextResponse.json({ error: 'Model API is not configured.' }, { status: 503 });
+    }
+
+    if (Number(request.headers.get('content-length') || 0) > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: 'Request body is too large.' }, { status: 413 });
+    }
+    let emailText: unknown;
+    try {
+      const rawBody = await request.text();
+      if (rawBody.length > MAX_BODY_BYTES) {
+        return NextResponse.json({ error: 'Request body is too large.' }, { status: 413 });
+      }
+      const parsedBody: unknown = JSON.parse(rawBody);
+      emailText =
+        parsedBody && typeof parsedBody === 'object' ? (parsedBody as Record<string, unknown>).emailText : undefined;
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON payload received in request.' }, { status: 400 });
+    }
 
     if (!emailText || typeof emailText !== 'string' || emailText.trim().length === 0) {
       return NextResponse.json(
         { error: 'Invalid request: "emailText" is required.' },
         { status: 400 }
+      );
+    }
+    if (emailText.length > MAX_EMAIL_CHARS) {
+      return NextResponse.json(
+        { error: `Email is too long to analyze (max ${MAX_EMAIL_CHARS.toLocaleString()} characters).` },
+        { status: 413 }
       );
     }
 
@@ -68,7 +97,6 @@ Guidelines:
 - "questionsNeedingAnswers": Specific questions asked in the email that require response (or empty array if none).
 - "suggestedReplyPrompt": A ready-to-use prompt that acknowledges the main points and addresses the questions.`;
 
-    const isGeminiNative = apiUrl.includes('generativelanguage.googleapis.com');
     const candidateModels = isGeminiNative
       ? ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3-flash-preview']
       : [modelName];
@@ -76,7 +104,10 @@ Guidelines:
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (!isGeminiNative && apiKey) {
+    if (isGeminiNative && apiKey) {
+      // Header instead of ?key= query param so the key never appears in URLs/logs
+      headers['x-goog-api-key'] = apiKey;
+    } else if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
@@ -85,16 +116,21 @@ Guidelines:
 
     let res: Response | undefined;
     let lastErr = '';
+    let lastStatus = 0;
+    let timedOut = false;
     const ATTEMPT_TIMEOUT_MS = 8000;
 
     for (const modelToTry of candidateModels) {
-      if (controller.signal.aborted) break;
+      if (controller.signal.aborted) {
+        timedOut = true;
+        break;
+      }
 
       let targetUrl = apiUrl;
       let payload: Record<string, unknown>;
 
       if (isGeminiNative) {
-        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${apiKey}`;
+        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelToTry)}:generateContent`;
         payload = {
           system_instruction: {
             parts: [{ text: systemPrompt }],
@@ -147,6 +183,7 @@ Guidelines:
           res = response;
           break;
         } else {
+          lastStatus = response.status;
           lastErr = await response.text().catch(() => response.statusText);
           if (response.status === 503 || response.status === 429 || response.status === 404 || response.status >= 500) {
             continue;
@@ -157,8 +194,14 @@ Guidelines:
         clearTimeout(attemptTimer);
         controller.signal.removeEventListener('abort', onGlobalAbort);
 
-        if (controller.signal.aborted) break;
-        if (attemptTimedOut) continue;
+        if (controller.signal.aborted) {
+          timedOut = true;
+          break;
+        }
+        if (attemptTimedOut) {
+          timedOut = true;
+          continue;
+        }
 
         lastErr = fErr instanceof Error ? fErr.message : 'Network error';
       }
@@ -167,26 +210,50 @@ Guidelines:
     clearTimeout(timeoutId);
 
     if (!res || !res.ok) {
+      // Upstream error bodies can reveal provider internals: log them, return a generic message
+      console.error(`Summarize model failure (status ${lastStatus || 'n/a'}):`, lastErr.slice(0, 2000));
+      if (!res && timedOut && !lastStatus) {
+        return NextResponse.json(
+          { error: 'Model request timed out. Please try again.' },
+          { status: 504 }
+        );
+      }
       return NextResponse.json(
-        { error: `Model service error: ${lastErr || 'Failed to connect to model service'}` },
+        {
+          error: lastStatus
+            ? `Model service returned an error (HTTP ${lastStatus}). Please try again.`
+            : 'Failed to connect to model service. Please try again.',
+        },
         { status: 502 }
       );
     }
 
-    const data = await res.json();
-    let rawText = '';
-
-    if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      rawText = data.candidates[0].content.parts[0].text;
-    } else if (data?.choices?.[0]?.message?.content) {
-      rawText = data.choices[0].message.content;
-    } else {
-      rawText = typeof data === 'string' ? data : JSON.stringify(data);
+    let parsed: Record<string, unknown>;
+    try {
+      const data = await res.json();
+      let rawText: unknown = '';
+      if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        rawText = data.candidates[0].content.parts[0].text;
+      } else if (data?.choices?.[0]?.message?.content) {
+        rawText = data.choices[0].message.content;
+      }
+      if (typeof rawText !== 'string' || !rawText.trim()) {
+        throw new Error('Model returned no text');
+      }
+      // Clean JSON markdown if wrapped in ```json / ``` fences
+      const cleanedJson = rawText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const candidate: unknown = JSON.parse(cleanedJson);
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        throw new Error('Model JSON is not an object');
+      }
+      parsed = candidate as Record<string, unknown>;
+    } catch (parseErr) {
+      console.error('Summarize: could not parse model output:', parseErr);
+      return NextResponse.json(
+        { error: 'The model returned an unreadable analysis. Please try again.' },
+        { status: 502 }
+      );
     }
-
-    // Clean JSON markdown if wrapped in ```json
-    const cleanedJson = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-    const parsed = JSON.parse(cleanedJson);
 
     const sanitizeList = (arr: unknown) =>
       Array.isArray(arr) ? arr.map((item) => sanitizeModelOutput(String(item))) : [];
@@ -196,12 +263,15 @@ Guidelines:
       importantDates: sanitizeList(parsed.importantDates),
       requiredActions: sanitizeList(parsed.requiredActions),
       questionsNeedingAnswers: sanitizeList(parsed.questionsNeedingAnswers),
-      suggestedReplyPrompt: sanitizeModelOutput(parsed.suggestedReplyPrompt || ''),
+      suggestedReplyPrompt:
+        typeof parsed.suggestedReplyPrompt === 'string'
+          ? sanitizeModelOutput(parsed.suggestedReplyPrompt)
+          : '',
     });
   } catch (error: unknown) {
-    const err = error as Error;
+    console.error('Unhandled /api/summarize error:', error);
     return NextResponse.json(
-      { error: `Failed to summarize email: ${err.message || 'Unknown error'}` },
+      { error: 'Failed to summarize email. Please try again.' },
       { status: 500 }
     );
   }

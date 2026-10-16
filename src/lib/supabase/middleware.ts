@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import type { User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function updateSession(request: NextRequest) {
@@ -31,25 +32,41 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Do not run on static files or API routes
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refreshes the session (and rotates auth cookies via setAll) on every matched request
+  let user: User | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    console.error('Supabase session refresh failed in middleware:', err);
+    return supabaseResponse;
+  }
 
   const pathname = request.nextUrl.pathname;
 
+  // Any redirect must carry the refreshed auth cookies, otherwise a rotated refresh token is lost
+  // and the user gets signed out on the next request.
+  const redirectWithCookies = (url: URL) => {
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
+  };
+
   // Protected routes: /onboarding requires authentication
-  if (!user && pathname.startsWith('/onboarding')) {
+  if (!user && (pathname === '/onboarding' || pathname.startsWith('/onboarding/'))) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth';
+    url.search = '';
     url.searchParams.set('redirectTo', pathname);
-    return NextResponse.redirect(url);
+    return redirectWithCookies(url);
   }
 
-  // If authenticated user visits /auth, send them to onboarding or workspace
-  if (user && pathname.startsWith('/auth')) {
+  // If authenticated user visits the /auth page, send them to onboarding or workspace.
+  // Exact match only: /auth/callback must reach its route handler to exchange the OAuth code / honour `next`.
+  if (user && (pathname === '/auth' || pathname === '/auth/')) {
     const url = request.nextUrl.clone();
-    
+    url.search = '';
+
     // Check cookie, user metadata, or profiles table
     let isCompleted =
       request.cookies.get('loom_onboarding_completed')?.value === 'true' ||
@@ -77,7 +94,7 @@ export async function updateSession(request: NextRequest) {
     } else {
       url.pathname = '/onboarding';
     }
-    return NextResponse.redirect(url);
+    return redirectWithCookies(url);
   }
 
   return supabaseResponse;

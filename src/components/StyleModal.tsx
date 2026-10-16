@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Sparkles, Check, Trash2, Sliders } from 'lucide-react';
+import { X, Check, Trash2 } from 'lucide-react';
 import { WritingProfile, EmailTone } from '@/types';
 import { DEFAULT_WRITING_PROFILE } from '@/lib/storage';
 
@@ -46,6 +46,20 @@ const LANGUAGES = [
   'Italian',
 ];
 
+const SAMPLE_TARGET_WORDS = 25;
+
+const segmentClass = (active: boolean) =>
+  `inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+    active ? 'bg-raised text-fg shadow-sm' : 'text-fg-subtle hover:text-fg'
+  }`;
+
+const optionCardClass = (active: boolean) =>
+  `relative w-full rounded-2xl border p-3.5 text-left transition-colors ${
+    active
+      ? 'border-accent-line bg-accent-soft'
+      : 'border-line bg-panel hover:border-line-strong hover:bg-hover'
+  }`;
+
 export function StyleModal({
   isOpen,
   onClose,
@@ -61,6 +75,15 @@ export function StyleModal({
       setProfile(writingProfile);
     }
   }, [writingProfile, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -78,110 +101,115 @@ export function StyleModal({
   };
 
   const wordCount = profile.styleSample?.trim() ? profile.styleSample.trim().split(/\s+/).length : 0;
+  const sampleStrength = Math.min(wordCount / SAMPLE_TARGET_WORDS, 1);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 grid place-items-center p-4" onClick={onClose}>
+      <div className="modal-backdrop animate-in fade-in duration-150" aria-hidden="true" />
       <div
-        className="relative w-full max-w-xl max-h-[88vh] flex flex-col rounded-2xl bg-[#0d0f17] shadow-2xl border border-white/[0.08] text-[#f8fafc] overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="style-modal-title"
+        className="modal-panel relative z-10 w-full max-w-2xl max-h-[85dvh] flex flex-col overflow-hidden text-fg animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-white/[0.08] bg-[#090a0f]">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#121520] text-cyan-400 border border-white/[0.08]">
-              <Sparkles className="h-5 w-5" />
+        <div className="px-6 pt-5 pb-4 border-b border-line">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 id="style-modal-title" className="text-lg font-semibold text-fg">
+                Writing profile
+              </h2>
+              <p className="mt-0.5 text-sm text-fg-subtle">
+                Personalize tone, conventions, and your authentic voice.
+              </p>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-[#f8fafc] font-mono">Personal Writing Profile</h2>
-              <p className="text-xs text-zinc-400">Personalize tone, conventions, and authentic voice</p>
-            </div>
+            <button onClick={onClose} className="icon-btn -mr-2 -mt-1" aria-label="Close">
+              <X className="size-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.05] hover:text-[#f8fafc] transition-colors cursor-pointer"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        {/* Tab Selector */}
-        <div className="flex items-center px-5 pt-3 border-b border-white/[0.08] bg-[#090a0f] gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('sample')}
-            className={`flex items-center gap-2 pb-2.5 px-2 text-xs font-mono font-medium border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'sample'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-zinc-400 hover:text-[#f8fafc]'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Voice Sample {wordCount > 0 ? `(${wordCount}w)` : ''}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('preferences')}
-            className={`flex items-center gap-2 pb-2.5 px-2 text-xs font-mono font-medium border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'preferences'
-                ? 'border-cyan-400 text-cyan-300'
-                : 'border-transparent text-zinc-400 hover:text-[#f8fafc]'
-            }`}
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Style & Conventions</span>
-          </button>
+          {/* Tabs */}
+          <div className="mt-4 inline-flex p-1 rounded-full bg-panel border border-line" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'sample'}
+              onClick={() => setActiveTab('sample')}
+              className={segmentClass(activeTab === 'sample')}
+            >
+              <span>Voice sample</span>
+              {wordCount > 0 && (
+                <span className="font-mono text-xs tabular-nums text-fg-subtle">{wordCount}w</span>
+              )}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'preferences'}
+              onClick={() => setActiveTab('preferences')}
+              className={segmentClass(activeTab === 'preferences')}
+            >
+              Style &amp; conventions
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 max-h-[58vh]">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
           {activeTab === 'sample' ? (
-            <div>
-              <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
-                Paste an email or paragraph you previously wrote. LOOM AI emulates your actual sentence
-                length, vocabulary, phrasing rhythm, and sign-offs to write future drafts in your authentic voice.
+            <div className="space-y-3">
+              <p className="text-sm text-fg-muted leading-relaxed">
+                Paste an email or paragraph you previously wrote. LOOM AI emulates your sentence length,
+                vocabulary, phrasing rhythm, and sign-offs to write future drafts in your own voice.
               </p>
 
+              <label htmlFor="style-sample" className="sr-only">
+                Voice sample
+              </label>
               <textarea
+                id="style-sample"
                 value={profile.styleSample || ''}
                 onChange={(e) => setProfile((prev) => ({ ...prev, styleSample: e.target.value }))}
-                rows={7}
+                rows={8}
                 placeholder={`e.g.\nHi Sarah,\n\nHope your week is going great! Quick follow-up on the design proposal we reviewed on Tuesday. Everything looks solid—just have two quick questions on timeline.\n\nLet me know if you have 5 mins tomorrow.\n\nBest,\nAlex`}
-                className="w-full rounded-xl border border-white/[0.08] bg-[#121520] p-3 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/30 font-sans leading-relaxed resize-y"
+                className="field max-sm:text-base min-h-48 resize-y leading-relaxed"
               />
 
-              <div className="flex items-center justify-between mt-2 px-1 text-xs text-zinc-500 font-mono">
-                <span>
-                  {wordCount > 0 ? (
-                    <span className="text-cyan-400 font-medium">{wordCount} words provided</span>
-                  ) : (
-                    'No sample set'
+              <div className="space-y-2">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-line" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full bg-accent transition-[width] duration-300"
+                    style={{ width: `${sampleStrength * 100}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-fg-subtle">
+                  <span>
+                    {wordCount > 0 ? (
+                      <span className="text-fg-muted">
+                        <span className="font-mono tabular-nums">{wordCount}</span> words provided
+                      </span>
+                    ) : (
+                      'No sample set'
+                    )}
+                  </span>
+                  {wordCount > 0 && wordCount < SAMPLE_TARGET_WORDS && (
+                    <span>Tip: 25+ words gives the best personalization</span>
                   )}
-                </span>
-                {wordCount > 0 && wordCount < 25 && (
-                  <span className="text-cyan-400">Tip: 25+ words gives best personalization</span>
-                )}
+                </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <>
               {/* Default Tone */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  Default Email Tone
-                </label>
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="label">Default email tone</span>
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => setProfile((prev) => ({ ...prev, defaultTone: null }))}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                      !profile.defaultTone
-                        ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 font-semibold'
-                        : 'bg-[#121520] text-zinc-400 hover:text-[#f8fafc] border-white/[0.08]'
-                    }`}
+                    data-active={!profile.defaultTone}
+                    className="chip"
                   >
                     Natural / Dynamic
                   </button>
@@ -190,11 +218,8 @@ export function StyleModal({
                       key={tone}
                       type="button"
                       onClick={() => setProfile((prev) => ({ ...prev, defaultTone: tone }))}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                        profile.defaultTone === tone
-                          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 font-semibold'
-                          : 'bg-[#121520] text-zinc-400 hover:text-[#f8fafc] border-white/[0.08]'
-                      }`}
+                      data-active={profile.defaultTone === tone}
+                      className="chip"
                     >
                       {tone}
                     </button>
@@ -204,89 +229,94 @@ export function StyleModal({
 
               {/* Preferred Length */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  Preferred Draft Length
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {LENGTH_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setProfile((prev) => ({ ...prev, preferredLength: opt.id }))}
-                      className={`p-2.5 rounded-xl text-left transition-colors cursor-pointer border ${
-                        profile.preferredLength === opt.id
-                          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
-                          : 'bg-[#121520] text-zinc-400 hover:text-[#f8fafc] border-white/[0.08]'
-                      }`}
-                    >
-                      <div className="text-xs font-mono font-semibold block">{opt.label}</div>
-                      <div className="text-[10px] text-zinc-500 mt-0.5">{opt.desc}</div>
-                    </button>
-                  ))}
+                <span className="label">Preferred draft length</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {LENGTH_OPTIONS.map((opt) => {
+                    const active = profile.preferredLength === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setProfile((prev) => ({ ...prev, preferredLength: opt.id }))}
+                        className={optionCardClass(active)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-fg">{opt.label}</span>
+                          {active && <Check className="size-3.5 text-accent" />}
+                        </div>
+                        <div className="mt-0.5 text-xs text-fg-subtle">{opt.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Writing Style Demeanor */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  Writing Demeanor
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {STYLE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setProfile((prev) => ({ ...prev, writingStyle: opt.id }))}
-                      className={`p-2.5 rounded-xl text-left transition-colors cursor-pointer border ${
-                        profile.writingStyle === opt.id
-                          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
-                          : 'bg-[#121520] text-zinc-400 hover:text-[#f8fafc] border-white/[0.08]'
-                      }`}
-                    >
-                      <div className="text-xs font-mono font-semibold block">{opt.label}</div>
-                      <div className="text-[10px] text-zinc-500 mt-0.5">{opt.desc}</div>
-                    </button>
-                  ))}
+                <span className="label">Writing demeanor</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {STYLE_OPTIONS.map((opt) => {
+                    const active = profile.writingStyle === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setProfile((prev) => ({ ...prev, writingStyle: opt.id }))}
+                        className={optionCardClass(active)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-fg">{opt.label}</span>
+                          {active && <Check className="size-3.5 text-accent" />}
+                        </div>
+                        <div className="mt-0.5 text-xs text-fg-subtle">{opt.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Greeting & Sign-off */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1 uppercase tracking-wider">
-                    Preferred Greeting
+                  <label htmlFor="style-greeting" className="label">
+                    Preferred greeting
                   </label>
                   <input
+                    id="style-greeting"
                     type="text"
                     value={profile.preferredGreeting}
                     onChange={(e) => setProfile((prev) => ({ ...prev, preferredGreeting: e.target.value }))}
                     placeholder="e.g. Hi [Name],"
-                    className="w-full bg-[#121520] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400 font-sans"
+                    className="field max-sm:text-base"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1 uppercase tracking-wider">
-                    Preferred Sign-off
+                  <label htmlFor="style-signoff" className="label">
+                    Preferred sign-off
                   </label>
                   <input
+                    id="style-signoff"
                     type="text"
                     value={profile.preferredSignoff}
                     onChange={(e) => setProfile((prev) => ({ ...prev, preferredSignoff: e.target.value }))}
                     placeholder="e.g. Best,"
-                    className="w-full bg-[#121520] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400 font-sans"
+                    className="field max-sm:text-base"
                   />
                 </div>
               </div>
 
               {/* Language */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  Default Language
+                <label htmlFor="style-language" className="label">
+                  Default language
                 </label>
                 <select
+                  id="style-language"
                   value={profile.preferredLanguage}
                   onChange={(e) => setProfile((prev) => ({ ...prev, preferredLanguage: e.target.value }))}
-                  className="w-full bg-[#121520] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-[#f8fafc] focus:outline-none focus:border-cyan-400 font-mono cursor-pointer"
+                  className="field max-sm:text-base cursor-pointer"
                 >
                   {LANGUAGES.map((lang) => (
                     <option key={lang} value={lang}>
@@ -295,42 +325,33 @@ export function StyleModal({
                   ))}
                 </select>
               </div>
-            </div>
+            </>
           )}
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between p-4 border-t border-white/[0.08] bg-[#090a0f]">
+        <div className="px-6 py-4 border-t border-line flex items-center justify-between gap-2">
           {activeTab === 'sample' && profile.styleSample?.trim() ? (
-            <button
-              onClick={handleClearSample}
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-950/20 cursor-pointer font-mono"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Clear Sample
+            <button onClick={handleClearSample} className="btn btn-ghost -ml-2 hover:text-danger">
+              <Trash2 className="size-4" />
+              Clear sample
             </button>
           ) : (
             <div />
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="rounded-xl px-3.5 py-2 text-xs font-mono font-medium text-zinc-400 hover:text-[#f8fafc] hover:bg-white/[0.05] transition-colors cursor-pointer"
-            >
+            <button onClick={onClose} className="btn btn-ghost">
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 px-4 py-2 text-xs font-sans font-semibold transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.25)]"
-            >
+            <button onClick={handleSave} className="btn btn-primary">
               {savedSuccess ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-white" />
-                  Saved!
+                  <Check className="size-4" />
+                  Saved
                 </>
               ) : (
-                'Save Profile'
+                'Save profile'
               )}
             </button>
           </div>

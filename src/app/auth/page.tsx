@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { Mail, Lock, AlertCircle, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, AlertCircle, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 
 function getSafeRedirectUrl(target: string | null): string {
   if (!target) return '/app';
@@ -18,7 +18,9 @@ function getSafeRedirectUrl(target: string | null): string {
     try {
       const dummyOrigin = 'http://localhost';
       const parsed = new URL(target, dummyOrigin);
-      if (parsed.origin === dummyOrigin) {
+      // `/.//evil.com` normalizes to the path `//evil.com`, which the router would treat
+      // as protocol-relative — reject anything whose normalized path isn't a single slash.
+      if (parsed.origin === dummyOrigin && !parsed.pathname.startsWith('//')) {
         return parsed.pathname + parsed.search + parsed.hash;
       }
     } catch {
@@ -196,207 +198,218 @@ function AuthContent() {
     }
   };
 
-  return (
-    <div className="min-h-dvh flex flex-col justify-center items-center px-4 py-12 bg-[#090a0f] text-[#f8fafc] relative overflow-hidden font-sans">
-      {/* Background ambient glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+  const tabClass = (active: boolean) =>
+    `h-8 rounded-full text-sm font-medium transition-colors ${
+      active ? 'bg-raised text-fg shadow-sm' : 'text-fg-subtle hover:text-fg'
+    }`;
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Brand Header */}
-        <div className="text-center mb-8 flex flex-col items-center">
-          <Link href="/" className="mb-4 hover:scale-105 transition-transform">
-            <Logo size="xl" withGlow={true} />
+  return (
+    <div className="min-h-dvh flex flex-col items-center px-4 pb-10 pt-[max(3rem,calc(50dvh_-_22rem))] bg-bg text-fg">
+      <div className="w-full max-w-[400px] animate-fade-up">
+        {/* Brand header */}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Link href="/" aria-label="Loom.ai home" className="mb-6 flex rounded-xl">
+            <Logo size="lg" />
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            {mode === 'signin' ? 'Welcome back to LOOM' : 'Create your LOOM account'}
+          <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+            {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </h1>
-          <p className="text-xs text-slate-400 mt-1.5 max-w-xs">
+          <p className="mt-2 text-[15px] text-fg-muted">
             Your emails, written the way you would write them.
           </p>
         </div>
 
-        {/* Configuration Notice */}
+        {/* Configuration notice */}
         {!supabaseConfigured && (
-          <div className="mb-6 p-4 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 text-cyan-300 text-xs leading-relaxed flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 text-cyan-400 mt-0.5" />
+          <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-line-strong bg-panel px-3.5 py-2.5 text-sm leading-relaxed text-fg-muted">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
             <div>
-              <span className="font-semibold block mb-0.5">Supabase Configuration Required</span>
-              Add your credentials to <code className="bg-cyan-900/40 px-1 py-0.5 rounded text-cyan-200 font-mono">.env.local</code> to activate live authentication.
+              <span className="block font-medium text-fg">Supabase configuration required</span>
+              Add your credentials to{' '}
+              <code className="rounded bg-elevated px-1 py-0.5 font-mono text-[13px] text-fg">.env.local</code>{' '}
+              to activate live authentication.
             </div>
           </div>
         )}
 
-        {/* Auth Card */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#0d0f17] p-6 sm:p-8 shadow-2xl shadow-black/60">
-          {/* Mode Switcher Tabs */}
-          <div className="grid grid-cols-2 p-1 rounded-xl bg-[#121520] border border-white/[0.06] mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin');
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
-              className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                mode === 'signin'
-                  ? 'bg-white/[0.08] text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signup');
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
-              className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                mode === 'signup'
-                  ? 'bg-white/[0.08] text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-
-          {/* Messages */}
-          {errorMessage && (
-            <div className="mb-5 p-3.5 rounded-xl border border-red-500/30 bg-red-950/20 text-red-300 text-xs flex items-start gap-2.5 leading-relaxed">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {successMessage && (
-            <div className="mb-5 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-300 text-xs flex items-start gap-2.5 leading-relaxed">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>{successMessage}</span>
-            </div>
-          )}
-
-          {/* Google OAuth Button */}
+        {/* Mode switcher */}
+        <div className="mb-6 grid grid-cols-2 rounded-full border border-line bg-panel p-1">
           <button
             type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isGoogleLoading || isLoading}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-white/[0.08] bg-[#121520] hover:bg-[#181b28] text-slate-200 text-xs font-medium transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            aria-pressed={mode === 'signin'}
+            onClick={() => {
+              setMode('signin');
+              setErrorMessage(null);
+              setSuccessMessage(null);
+            }}
+            className={tabClass(mode === 'signin')}
           >
-            {isGoogleLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-            ) : (
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                />
-              </svg>
-            )}
-            <span>Continue with Google</span>
+            Sign in
           </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'signup'}
+            onClick={() => {
+              setMode('signup');
+              setErrorMessage(null);
+              setSuccessMessage(null);
+            }}
+            className={tabClass(mode === 'signup')}
+          >
+            Create account
+          </button>
+        </div>
 
-          {/* Divider */}
-          <div className="flex items-center my-5">
-            <div className="flex-1 border-t border-white/[0.08]" />
-            <span className="px-3 text-[11px] text-slate-500 font-mono">or email</span>
-            <div className="flex-1 border-t border-white/[0.08]" />
+        {/* Messages */}
+        {errorMessage && (
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-2.5 rounded-xl border border-danger-line bg-danger-soft px-3.5 py-2.5 text-sm leading-relaxed text-danger"
+          >
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
+        )}
 
-          {/* Form */}
-          <form onSubmit={handleEmailAuth} className="space-y-4">
-            {mode === 'signup' && (
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Full Name
-                </label>
+        {successMessage && (
+          <div
+            role="status"
+            className="mb-5 flex items-start gap-2.5 rounded-xl border border-success/30 bg-success-soft px-3.5 py-2.5 text-sm leading-relaxed text-success"
+          >
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Google OAuth */}
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={isGoogleLoading || isLoading}
+          className="btn btn-secondary btn-lg w-full gap-3"
+        >
+          {isGoogleLoading ? (
+            <Loader2 className="size-4 animate-spin text-fg-subtle" />
+          ) : (
+            <svg className="size-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#4285F4"
+                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+              />
+            </svg>
+          )}
+          <span>Continue with Google</span>
+        </button>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-3 text-xs text-fg-faint">
+          <div className="h-px flex-1 bg-line" />
+          <span>or</span>
+          <div className="h-px flex-1 bg-line" />
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleEmailAuth} className="space-y-4">
+          {mode === 'signup' && (
+            <div>
+              <label htmlFor="auth-full-name" className="label">
+                Full name
+              </label>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
                 <input
+                  id="auth-full-name"
                   type="text"
+                  autoComplete="name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Gautam Agrawal"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-xs placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all outline-none"
+                  className="field pl-10"
                 />
               </div>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="auth-email" className="label">
+              Email
+            </label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
+              <input
+                id="auth-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="gautam@company.com"
+                className="field pl-10"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="auth-password" className="label">
+              Password
+            </label>
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
+              <input
+                id="auth-password"
+                type="password"
+                required
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="field pl-10"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading || isGoogleLoading}
+            className="btn btn-primary btn-lg mt-2 w-full"
+          >
+            {isLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <>
+                <span>{mode === 'signin' ? 'Sign in' : 'Create free account'}</span>
+                <ArrowRight className="size-4" />
+              </>
             )}
+          </button>
+        </form>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="gautam@company.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-xs placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-xs placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all outline-none"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading || isGoogleLoading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white text-xs font-semibold transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-              ) : (
-                <>
-                  <span>{mode === 'signin' ? 'Sign In to Workspace' : 'Create Free Account'}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Guest and Navigation Links */}
-        <div className="flex items-center justify-between mt-6 px-1">
+        {/* Guest and navigation links */}
+        <div className="mt-8 flex items-center justify-between text-xs">
           <Link
             href="/"
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1 font-mono"
+            className="inline-flex min-h-9 items-center rounded-md px-1 text-fg-subtle transition-colors hover:text-fg"
           >
-            ← About LOOM AI
+            About Loom.ai
           </Link>
           <Link
             href="/app"
-            className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors inline-flex items-center gap-1 font-mono font-medium"
+            className="inline-flex min-h-9 items-center gap-1 rounded-md px-1 font-medium text-fg-muted transition-colors hover:text-fg"
           >
-            Continue as Guest →
+            Continue as guest
+            <ArrowRight className="size-3.5" />
           </Link>
         </div>
       </div>
@@ -408,8 +421,8 @@ export default function AuthPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-dvh flex items-center justify-center bg-[#090a0f]">
-          <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
+        <div className="min-h-dvh flex items-center justify-center bg-bg">
+          <Loader2 className="size-5 animate-spin text-fg-subtle" />
         </div>
       }
     >

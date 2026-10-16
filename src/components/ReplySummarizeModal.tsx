@@ -4,14 +4,12 @@ import { useState, useEffect } from 'react';
 import {
   X,
   Reply,
-  FileSearch,
   ArrowRight,
   Calendar,
   CheckCircle2,
   HelpCircle,
   ListOrdered,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import { EmailTone, EmailSummaryResult } from '@/types';
 
@@ -32,6 +30,40 @@ const TONES: EmailTone[] = [
   'Persuasive',
 ];
 
+const segmentClass = (active: boolean) =>
+  `inline-flex items-center h-8 px-3.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+    active ? 'bg-raised text-fg shadow-sm' : 'text-fg-subtle hover:text-fg'
+  }`;
+
+function SummarySection({
+  icon: Icon,
+  title,
+  items,
+  iconClassName = 'text-fg-subtle',
+}: {
+  icon: typeof ListOrdered;
+  title: string;
+  items: string[];
+  iconClassName?: string;
+}) {
+  return (
+    <section>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
+        <Icon className={`size-3.5 ${iconClassName}`} />
+        {title}
+      </h3>
+      <ul className="mt-2 space-y-1.5 text-sm text-fg-muted leading-relaxed">
+        {items.map((item, i) => (
+          <li key={i} className="flex items-start gap-2.5">
+            <span className="mt-[0.6em] size-1 shrink-0 rounded-full bg-fg-faint" aria-hidden="true" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function ReplySummarizeModal({
   isOpen,
   onClose,
@@ -47,6 +79,16 @@ export function ReplySummarizeModal({
       setActiveTab(initialTab);
     }
   }, [isOpen, initialTab]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   // Reply tab state
   const [receivedEmail, setReceivedEmail] = useState('');
@@ -121,101 +163,104 @@ ${receivedEmail.trim()}
     onClose();
   };
 
+  const isReply = activeTab === 'reply';
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 grid place-items-center p-4" onClick={onClose}>
+      <div className="modal-backdrop animate-in fade-in duration-150" aria-hidden="true" />
       <div
-        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-[#0d0f17] shadow-2xl border border-white/[0.08] text-[#f8fafc] overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reply-summarize-title"
+        className="modal-panel relative z-10 w-full max-w-2xl max-h-[85dvh] flex flex-col overflow-hidden text-fg animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Tabs */}
-        <div className="flex items-center justify-between p-4 border-b border-white/[0.08] bg-[#090a0f]">
-          <div className="flex items-center gap-1.5 bg-[#121520] border border-white/[0.08] p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setActiveTab('reply')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
-                activeTab === 'reply'
-                  ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 font-semibold shadow-xs'
-                  : 'text-zinc-400 hover:text-[#f8fafc] border border-transparent'
-              }`}
-            >
-              <Reply className="w-3.5 h-3.5" />
-              <span>Reply to Email</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('summarize')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
-                activeTab === 'summarize'
-                  ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 font-semibold shadow-xs'
-                  : 'text-zinc-400 hover:text-[#f8fafc] border border-transparent'
-              }`}
-            >
-              <FileSearch className="w-3.5 h-3.5" />
-              <span>Summarize Email</span>
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4 border-b border-line">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 id="reply-summarize-title" className="text-lg font-semibold text-fg">
+                {isReply ? 'Reply to an email' : 'Summarize an email'}
+              </h2>
+              <p className="mt-0.5 text-sm text-fg-subtle">
+                {isReply
+                  ? 'Paste what you received and LOOM drafts a context-aware reply.'
+                  : 'Pull out the main points, dates, actions, and open questions.'}
+              </p>
+            </div>
+            <button onClick={onClose} className="icon-btn -mr-2 -mt-1" aria-label="Close">
+              <X className="size-4" />
             </button>
           </div>
 
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.05] hover:text-[#f8fafc] transition-colors cursor-pointer"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* Tabs */}
+          <div className="mt-4 inline-flex p-1 rounded-full bg-panel border border-line" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'reply'}
+              onClick={() => setActiveTab('reply')}
+              className={segmentClass(activeTab === 'reply')}
+            >
+              Reply to email
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'summarize'}
+              onClick={() => setActiveTab('summarize')}
+              className={segmentClass(activeTab === 'summarize')}
+            >
+              Summarize email
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 max-h-[65vh]">
-          {activeTab === 'reply' ? (
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
+          {isReply ? (
             <>
               {/* Received Email Input */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  1. Paste Received Email:
+                <label htmlFor="reply-received" className="label">
+                  Email you received
                 </label>
                 <textarea
+                  id="reply-received"
                   value={receivedEmail}
                   onChange={(e) => setReceivedEmail(e.target.value)}
-                  rows={5}
-                  placeholder="Paste the email you received here..."
-                  className="w-full bg-[#121520] border border-white/[0.08] rounded-xl p-3 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400 font-sans leading-relaxed resize-y"
+                  rows={6}
+                  placeholder="Paste the email you received here…"
+                  className="field max-sm:text-base min-h-36 resize-y leading-relaxed"
                 />
               </div>
 
               {/* User's Intended Response */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  2. What would you like to say?
+                <label htmlFor="reply-intent" className="label">
+                  What would you like to say?
                 </label>
                 <input
+                  id="reply-intent"
                   type="text"
                   value={intent}
                   onChange={(e) => setIntent(e.target.value)}
                   placeholder="e.g. Accept the meeting but propose Tuesday 2pm instead; thank them for the quick turnaround"
-                  className="w-full bg-[#121520] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400 font-sans"
+                  className="field max-sm:text-base"
                 />
               </div>
 
               {/* Tone Selection */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  3. Select Response Tone:
-                </label>
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="label">Tone</span>
+                <div className="flex flex-wrap items-center gap-1.5">
                   {TONES.map((tone) => (
                     <button
                       key={tone}
                       type="button"
                       onClick={() => setSelectedTone(selectedTone === tone ? null : tone)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                        selectedTone === tone
-                          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 font-semibold'
-                          : 'bg-[#121520] text-zinc-400 hover:text-white border-white/[0.08]'
-                      }`}
+                      data-active={selectedTone === tone}
+                      className="chip"
                     >
                       {tone}
                     </button>
@@ -225,15 +270,17 @@ ${receivedEmail.trim()}
 
               {/* Extra Context */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  4. Additional Constraints or Context (Optional):
+                <label htmlFor="reply-context" className="label">
+                  Additional constraints or context{' '}
+                  <span className="font-normal text-fg-subtle">(optional)</span>
                 </label>
                 <input
+                  id="reply-context"
                   type="text"
                   value={extraContext}
                   onChange={(e) => setExtraContext(e.target.value)}
                   placeholder="e.g. Don't mention the budget yet; keep under 100 words"
-                  className="w-full bg-[#121520] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400 font-sans"
+                  className="field max-sm:text-base"
                 />
               </div>
             </>
@@ -241,134 +288,85 @@ ${receivedEmail.trim()}
             <>
               {/* Summarize Tab */}
               <div>
-                <label className="block text-xs font-mono font-semibold text-[#f8fafc] mb-1.5 uppercase tracking-wider">
-                  Paste Email or Thread to Analyze:
+                <label htmlFor="summarize-input" className="label">
+                  Email or thread to analyze
                 </label>
                 <textarea
+                  id="summarize-input"
                   value={emailToSummarize}
                   onChange={(e) => setEmailToSummarize(e.target.value)}
-                  rows={5}
-                  placeholder="Paste the email thread or lengthy message you wish to summarize..."
-                  className="w-full bg-[#121520] border border-white/[0.08] rounded-xl p-3 text-xs text-[#f8fafc] placeholder:text-zinc-500 focus:outline-none focus:border-cyan-400 font-sans leading-relaxed resize-y"
+                  rows={6}
+                  placeholder="Paste the email thread or lengthy message you want summarized…"
+                  className="field max-sm:text-base min-h-36 resize-y leading-relaxed"
                 />
-                <div className="flex justify-end mt-2">
+                <div className="mt-3 flex justify-end">
                   <button
                     type="button"
                     onClick={handleRunSummarize}
                     disabled={!emailToSummarize.trim() || isSummarizing}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-sans font-semibold transition-all ${
-                      !emailToSummarize.trim() || isSummarizing
-                        ? 'bg-zinc-800/80 text-zinc-500 cursor-not-allowed border border-white/[0.04]'
-                        : 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 shadow-[0_0_15px_rgba(34,211,238,0.25)] cursor-pointer'
-                    }`}
+                    className={`btn ${summaryResult ? 'btn-secondary' : 'btn-primary'}`}
                   >
                     {isSummarizing ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Analyzing...</span>
+                        <Loader2 className="size-4 animate-spin" />
+                        Analyzing…
                       </>
                     ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Summarize Email</span>
-                      </>
+                      'Summarize email'
                     )}
                   </button>
                 </div>
               </div>
 
               {summaryError && (
-                <div className="p-3 rounded-xl bg-red-950/30 border border-red-900/40 text-red-300 text-xs font-mono">
+                <div
+                  role="alert"
+                  className="rounded-xl border border-danger-line bg-danger-soft text-danger px-3.5 py-2.5 text-sm"
+                >
                   {summaryError}
                 </div>
               )}
 
               {/* Summary Breakdown Results */}
               {summaryResult && (
-                <div className="space-y-3.5 pt-2 border-t border-white/[0.08]">
-                  {/* Main Points */}
-                  <div className="p-3.5 rounded-xl bg-[#121520] border border-white/[0.08]">
-                    <div className="flex items-center gap-2 mb-2 text-xs font-mono font-semibold text-[#f8fafc]">
-                      <ListOrdered className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Main Points</span>
-                    </div>
-                    <ul className="space-y-1.5 text-xs text-zinc-300 font-sans">
-                      {summaryResult.mainPoints.map((pt, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="text-cyan-400 font-bold">•</span>
-                          <span>{pt}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                <div className="space-y-5 border-t border-line pt-5 animate-fade-up">
+                  <SummarySection icon={ListOrdered} title="Main points" items={summaryResult.mainPoints} />
 
-                  {/* Dates & Deadlines */}
                   {summaryResult.importantDates.length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-[#121520] border border-white/[0.08]">
-                      <div className="flex items-center gap-2 mb-2 text-xs font-mono font-semibold text-cyan-300">
-                        <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Important Dates & Deadlines</span>
-                      </div>
-                      <ul className="space-y-1 text-xs text-zinc-300 font-sans">
-                        {summaryResult.importantDates.map((d, i) => (
-                          <li key={i} className="flex items-center gap-2">
-                            <span className="text-cyan-400 font-bold">•</span>
-                            <span>{d}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <SummarySection
+                      icon={Calendar}
+                      title="Important dates & deadlines"
+                      items={summaryResult.importantDates}
+                    />
                   )}
 
-                  {/* Required Actions */}
                   {summaryResult.requiredActions.length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-[#121520] border border-white/[0.08]">
-                      <div className="flex items-center gap-2 mb-2 text-xs font-mono font-semibold text-emerald-300">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Required Actions</span>
-                      </div>
-                      <ul className="space-y-1 text-xs text-zinc-300 font-sans">
-                        {summaryResult.requiredActions.map((act, i) => (
-                          <li key={i} className="flex items-center gap-2">
-                            <span className="text-emerald-400 font-bold">•</span>
-                            <span>{act}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <SummarySection
+                      icon={CheckCircle2}
+                      title="Required actions"
+                      items={summaryResult.requiredActions}
+                      iconClassName="text-success"
+                    />
                   )}
 
-                  {/* Questions Needing Answers */}
                   {summaryResult.questionsNeedingAnswers.length > 0 && (
-                    <div className="p-3.5 rounded-xl bg-[#121520] border border-white/[0.08]">
-                      <div className="flex items-center gap-2 mb-2 text-xs font-mono font-semibold text-purple-300">
-                        <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Questions Needing Answers</span>
-                      </div>
-                      <ul className="space-y-1 text-xs text-zinc-300 font-sans">
-                        {summaryResult.questionsNeedingAnswers.map((q, i) => (
-                          <li key={i} className="flex items-center gap-2">
-                            <span className="text-purple-400 font-bold">•</span>
-                            <span>{q}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <SummarySection
+                      icon={HelpCircle}
+                      title="Questions needing answers"
+                      items={summaryResult.questionsNeedingAnswers}
+                    />
                   )}
 
                   {/* 1-Click Generate Reply from Summary */}
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleReplyFromSummary}
-                      disabled={isLoading}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-950 font-sans font-semibold text-xs transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.25)]"
-                    >
-                      <Reply className="w-3.5 h-3.5" />
-                      <span>Generate Reply from this Summary</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReplyFromSummary}
+                    disabled={isLoading}
+                    className="btn btn-primary w-full"
+                  >
+                    {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Reply className="size-4" />}
+                    Generate reply from this summary
+                  </button>
                 </div>
               )}
             </>
@@ -376,26 +374,19 @@ ${receivedEmail.trim()}
         </div>
 
         {/* Footer */}
-        {activeTab === 'reply' && (
-          <div className="p-3.5 border-t border-white/[0.08] bg-[#090a0f] flex items-center justify-between">
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-xl text-xs font-sans text-zinc-400 hover:text-[#f8fafc] transition-colors cursor-pointer"
-            >
+        {isReply && (
+          <div className="px-6 py-4 border-t border-line flex items-center justify-end gap-2">
+            <button onClick={onClose} className="btn btn-ghost">
               Cancel
             </button>
             <button
               type="button"
               onClick={handleCreateReply}
               disabled={!receivedEmail.trim() || isLoading}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-sans font-semibold transition-all ${
-                !receivedEmail.trim() || isLoading
-                  ? 'bg-zinc-800/80 text-zinc-500 cursor-not-allowed border border-white/[0.04]'
-                  : 'bg-cyan-400 hover:bg-cyan-300 text-zinc-950 shadow-[0_0_15px_rgba(34,211,238,0.25)] cursor-pointer'
-              }`}
+              className="btn btn-primary"
             >
-              <span>Draft Response</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              Draft response
+              {isLoading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
             </button>
           </div>
         )}

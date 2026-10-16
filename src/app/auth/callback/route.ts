@@ -59,7 +59,8 @@ export async function GET(request: Request) {
           ) {
             try {
               const parsed = new URL(next, origin);
-              if (parsed.origin === origin) {
+              // Reject paths that normalise to protocol-relative form (e.g. "/.//evil.com" -> "//evil.com")
+              if (parsed.origin === origin && !parsed.pathname.startsWith('//')) {
                 safePath = parsed.pathname + parsed.search + parsed.hash;
               }
             } catch {

@@ -3,22 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Logo } from '@/components/Logo';
+import { Wordmark } from '@/components/Logo';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { UserCategory, EmailPurpose, PreferredStyle, WritingProfile } from '@/types';
 import { loadWritingProfile, saveWritingProfile } from '@/lib/storage';
-import {
-  ArrowRight,
-  ArrowLeft,
-  CheckCircle2,
-  Sparkles,
-  User,
-  Briefcase,
-  Target,
-  PenTool,
-  Loader2,
-  ExternalLink,
-} from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Loader2 } from 'lucide-react';
 
 const CATEGORIES: { label: UserCategory; desc: string }[] = [
   { label: 'Professional', desc: 'Working in tech, corporate, or operations' },
@@ -366,10 +355,10 @@ export default function OnboardingPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-[#090a0f]">
+      <div className="min-h-dvh flex items-center justify-center bg-bg">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-          <p className="text-xs text-slate-400 font-mono">Loading onboarding...</p>
+          <Loader2 className="size-5 animate-spin text-fg-subtle" />
+          <p className="text-sm text-fg-subtle">Loading onboarding…</p>
         </div>
       </div>
     );
@@ -377,328 +366,279 @@ export default function OnboardingPage() {
 
   const progressPercentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
 
-  return (
-    <div className="min-h-dvh flex flex-col justify-between bg-[#090a0f] text-[#f8fafc] p-4 sm:p-8 relative overflow-hidden font-sans">
-      {/* Background ambient glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+  const optionClass = (selected: boolean) =>
+    `relative w-full rounded-2xl border px-4 py-3.5 pr-11 text-left transition-colors ${
+      selected
+        ? 'border-accent-line bg-accent-soft'
+        : 'border-line bg-panel hover:border-line-strong'
+    }`;
 
-      {/* Top Header */}
-      <header className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6 relative z-10 border-b border-white/[0.08]">
-        <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
-          <Logo size="sm" />
-          <span className="font-mono text-sm font-semibold text-white tracking-tight">
-            LOOM.AI
-          </span>
-        </Link>
-        <div className="flex items-center gap-4">
+  const renderOptions = <T extends string>(
+    options: { label: T; desc: string }[],
+    selected: T | null,
+    onSelect: (value: T) => void
+  ) => (
+    <div className="grid grid-cols-1 gap-2.5">
+      {options.map((opt) => {
+        const isSelected = selected === opt.label;
+        return (
           <button
+            key={opt.label}
             type="button"
-            onClick={handleSkipToWorkspace}
-            className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+            aria-pressed={isSelected}
+            onClick={() => onSelect(opt.label)}
+            className={optionClass(isSelected)}
           >
-            <span>Skip to Workspace</span>
-            <ExternalLink className="w-3 h-3" />
+            <div className="text-sm font-medium text-fg">{opt.label}</div>
+            <div className="mt-0.5 text-sm leading-relaxed text-fg-muted">{opt.desc}</div>
+            {isSelected && (
+              <Check className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-accent" />
+            )}
           </button>
-          <span className="text-xs font-mono text-slate-400 bg-[#121520] border border-white/[0.08] px-2.5 py-0.5 rounded-md">
-            Step {currentStep} of {totalSteps}
-          </span>
-        </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="min-h-dvh flex flex-col bg-bg text-fg px-4 sm:px-8">
+      {/* Top bar */}
+      <header className="mx-auto flex w-full max-w-xl items-center justify-between pt-5 pb-4">
+        <Link href="/" aria-label="Loom.ai home" className="rounded-lg">
+          <Wordmark size="sm" />
+        </Link>
+        <button type="button" onClick={handleSkipToWorkspace} className="btn btn-ghost btn-sm -mr-2">
+          Skip to workspace
+        </button>
       </header>
 
-      {/* Progress Bar */}
-      <div className="w-full max-w-2xl mx-auto my-5 relative z-10">
-        <div className="h-1.5 w-full bg-[#121520] rounded-full overflow-hidden border border-white/[0.08]">
+      {/* Progress */}
+      <div className="mx-auto w-full max-w-xl">
+        <div className="flex items-center justify-between text-sm text-fg-subtle">
+          <span>
+            Step <span className="tabular-nums">{currentStep}</span> of{' '}
+            <span className="tabular-nums">{totalSteps}</span>
+          </span>
+          {currentStep === 5 && <span>Optional</span>}
+        </div>
+        <div
+          className="mt-2 h-1 w-full overflow-hidden rounded-full bg-line"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={totalSteps}
+          aria-valuenow={currentStep}
+        >
           <div
-            className="h-full bg-gradient-to-r from-cyan-500 to-purple-600 transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
       </div>
 
-      {/* Wizard Content Card */}
-      <main className="w-full max-w-2xl mx-auto flex-1 flex flex-col justify-center relative z-10 my-4">
-        <div className="rounded-2xl border border-white/[0.08] bg-[#0d0f17] p-6 sm:p-10 shadow-2xl shadow-black/60 transition-all">
-          {/* Validation Error banner */}
-          {validationError && (
-            <div className="mb-6 p-3 rounded-xl border border-red-500/30 bg-red-950/20 text-red-300 text-xs flex items-center gap-2">
-              <span>{validationError}</span>
+      {/* Wizard content */}
+      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col py-12 sm:py-16">
+        {/* STEP 1: PREFERRED NAME */}
+        {currentStep === 1 && (
+          <div className="animate-in fade-in duration-200">
+            <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+              What should Loom call you?
+            </h1>
+            <p className="mt-2 text-[15px] text-fg-muted">
+              Your preferred name will be used to personalize greetings and email sign-offs.
+            </p>
+
+            <div className="mt-8">
+              <label htmlFor="onboard-name" className="label">
+                Preferred name
+              </label>
+              <input
+                id="onboard-name"
+                type="text"
+                autoFocus
+                value={preferredName}
+                onChange={(e) => setPreferredName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleNext()}
+                placeholder="e.g. Gautam or Alex"
+                className="field"
+              />
             </div>
-          )}
+          </div>
+        )}
 
-          {/* STEP 1: PREFERRED NAME */}
-          {currentStep === 1 && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                <User className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-wider">Step 1</span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
-                What should LOOM call you?
-              </h2>
-              <p className="text-sm text-slate-400 mb-6">
-                Your preferred name will be used to personalize greetings and email sign-offs.
-              </p>
+        {/* STEP 2: USER CATEGORY */}
+        {currentStep === 2 && (
+          <div className="animate-in fade-in duration-200">
+            <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+              Which describes you best?
+            </h1>
+            <p className="mt-2 text-[15px] text-fg-muted">
+              Helps Loom tailor vocabulary, formality, and context to your daily work.
+            </p>
+            <div className="mt-8">{renderOptions(CATEGORIES, userCategory, setUserCategory)}</div>
+          </div>
+        )}
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-2">
-                  Preferred Name
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={preferredName}
-                  onChange={(e) => setPreferredName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleNext()}
-                  placeholder="e.g. Gautam or Alex"
-                  className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-sm placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans outline-none"
-                />
-              </div>
-            </div>
-          )}
+        {/* STEP 3: MAIN EMAIL PURPOSE */}
+        {currentStep === 3 && (
+          <div className="animate-in fade-in duration-200">
+            <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+              What will you mostly write?
+            </h1>
+            <p className="mt-2 text-[15px] text-fg-muted">
+              Tell us where most of your drafted emails will be sent.
+            </p>
+            <div className="mt-8">{renderOptions(PURPOSES, emailPurpose, setEmailPurpose)}</div>
+          </div>
+        )}
 
-          {/* STEP 2: USER CATEGORY */}
-          {currentStep === 2 && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                <Briefcase className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-wider">Step 2</span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
-                Which category describes you best?
-              </h2>
-              <p className="text-sm text-slate-400 mb-6">
-                Helps LOOM AI tailor vocabulary, formality, and context to your daily work.
-              </p>
+        {/* STEP 4: PREFERRED WRITING STYLE */}
+        {currentStep === 4 && (
+          <div className="animate-in fade-in duration-200">
+            <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+              What&apos;s your default writing style?
+            </h1>
+            <p className="mt-2 text-[15px] text-fg-muted">
+              Choose the baseline tone that feels most authentic to you.
+            </p>
+            <div className="mt-8">{renderOptions(STYLES, preferredStyle, setPreferredStyle)}</div>
+          </div>
+        )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.label}
-                    type="button"
-                    onClick={() => setUserCategory(cat.label)}
-                    className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
-                      userCategory === cat.label
-                        ? 'border-cyan-500/60 bg-cyan-500/15 text-white shadow-sm ring-1 ring-cyan-500/30'
-                        : 'border-white/[0.08] bg-[#121520] text-slate-300 hover:border-white/20 hover:bg-[#181b28]'
-                    }`}
-                  >
-                    <div className="text-sm font-semibold mb-1">{cat.label}</div>
-                    <div className="text-xs text-slate-400 leading-relaxed">{cat.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* STEP 5: OPTIONAL WRITING SAMPLE */}
+        {currentStep === 5 && (
+          <div className="animate-in fade-in duration-200">
+            <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+              Add a writing sample
+            </h1>
+            <p className="mt-2 text-[15px] text-fg-muted">
+              Paste an email or paragraph you wrote previously. Loom will learn your sentence
+              cadence and phrasing habits. You can skip this and add it anytime.
+            </p>
 
-          {/* STEP 3: MAIN EMAIL PURPOSE */}
-          {currentStep === 3 && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                <Target className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-wider">Step 3</span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
-                What is your main email writing goal?
-              </h2>
-              <p className="text-sm text-slate-400 mb-6">
-                Tell us where most of your drafted emails will be sent.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {PURPOSES.map((purp) => (
-                  <button
-                    key={purp.label}
-                    type="button"
-                    onClick={() => setEmailPurpose(purp.label)}
-                    className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
-                      emailPurpose === purp.label
-                        ? 'border-cyan-500/60 bg-cyan-500/15 text-white shadow-sm ring-1 ring-cyan-500/30'
-                        : 'border-white/[0.08] bg-[#121520] text-slate-300 hover:border-white/20 hover:bg-[#181b28]'
-                    }`}
-                  >
-                    <div className="text-sm font-semibold mb-1">{purp.label}</div>
-                    <div className="text-xs text-slate-400 leading-relaxed">{purp.desc}</div>
-                  </button>
-                ))}
+            <div className="mt-8">
+              <label htmlFor="onboard-sample" className="label">
+                Writing sample
+              </label>
+              <textarea
+                id="onboard-sample"
+                value={styleSample}
+                onChange={(e) => setStyleSample(e.target.value)}
+                rows={7}
+                placeholder={`Hi Team,\n\nHope everyone is having a solid week. Quick update on the roadmap deliverables—we closed the QA blockers this morning...\n\nBest,\n${
+                  preferredName || 'Alex'
+                }`}
+                className="field resize-y leading-relaxed"
+              />
+              <div className="mt-1.5 text-right text-xs text-fg-subtle tabular-nums">
+                {styleSample.trim()
+                  ? `${styleSample.trim().split(/\s+/).length} words provided`
+                  : 'Optional — you can skip this step'}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* STEP 6: CONFIRMATION & COMPLETION */}
+        {currentStep === 6 && (
+          <div className="animate-in fade-in duration-200">
+            <h1 className="font-display text-3xl font-normal tracking-tight text-fg">
+              You&apos;re ready to write with Loom
+            </h1>
+            <p className="mt-2 text-[15px] text-fg-muted">
+              We configured your workspace for{' '}
+              <span className="font-medium text-fg">{preferredName}</span> with a{' '}
+              <span className="font-medium text-fg">{preferredStyle}</span> style tailored for{' '}
+              <span className="font-medium text-fg">{emailPurpose}</span> communication.
+            </p>
+
+            <dl className="card mt-8 divide-y divide-line text-sm">
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt className="text-fg-subtle">Name</dt>
+                <dd className="font-medium text-fg">{preferredName}</dd>
+              </div>
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt className="text-fg-subtle">Category</dt>
+                <dd className="font-medium text-fg">{userCategory}</dd>
+              </div>
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt className="text-fg-subtle">Purpose</dt>
+                <dd className="font-medium text-fg">{emailPurpose}</dd>
+              </div>
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt className="text-fg-subtle">Baseline style</dt>
+                <dd className="font-medium text-fg">{preferredStyle}</dd>
+              </div>
+              <div className="flex justify-between gap-4 px-4 py-3">
+                <dt className="text-fg-subtle">Style sample</dt>
+                <dd className="font-medium text-fg">
+                  {styleSample.trim() ? 'Configured' : 'Skipped (can add anytime)'}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
+
+        {/* Validation error */}
+        {validationError && (
+          <div
+            role="alert"
+            className="mt-6 rounded-xl border border-danger-line bg-danger-soft px-3.5 py-2.5 text-sm text-danger"
+          >
+            {validationError}
+          </div>
+        )}
+
+        {/* Navigation controls */}
+        <div className="mt-10 flex items-center justify-between gap-4">
+          {currentStep > 1 && currentStep < totalSteps ? (
+            <button
+              type="button"
+              onClick={() => setCurrentStep((prev) => prev - 1)}
+              className="btn btn-ghost -ml-3"
+            >
+              <ArrowLeft className="size-4" />
+              <span>Back</span>
+            </button>
+          ) : (
+            <div />
           )}
 
-          {/* STEP 4: PREFERRED WRITING STYLE */}
-          {currentStep === 4 && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                <Sparkles className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-wider">Step 4</span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
-                What is your default writing style?
-              </h2>
-              <p className="text-sm text-slate-400 mb-6">
-                Choose the baseline tone that feels most authentic to you.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {STYLES.map((style) => (
-                  <button
-                    key={style.label}
-                    type="button"
-                    onClick={() => setPreferredStyle(style.label)}
-                    className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
-                      preferredStyle === style.label
-                        ? 'border-cyan-500/60 bg-cyan-500/15 text-white shadow-sm ring-1 ring-cyan-500/30'
-                        : 'border-white/[0.08] bg-[#121520] text-slate-300 hover:border-white/20 hover:bg-[#181b28]'
-                    }`}
-                  >
-                    <div className="text-sm font-semibold mb-1">{style.label}</div>
-                    <div className="text-xs text-slate-400 leading-relaxed">{style.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: OPTIONAL WRITING SAMPLE */}
-          {currentStep === 5 && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                <PenTool className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-wider">
-                  Step 5 (Optional)
-                </span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
-                Add a personal writing sample
-              </h2>
-              <p className="text-sm text-slate-400 mb-4">
-                Paste an email or paragraph you wrote previously. LOOM AI will analyze your sentence
-                cadence and phrasing habits. You can skip this and add it anytime.
-              </p>
-
-              <div className="mb-4">
-                <textarea
-                  value={styleSample}
-                  onChange={(e) => setStyleSample(e.target.value)}
-                  rows={6}
-                  placeholder={`Hi Team,\n\nHope everyone is having a solid week. Quick update on the roadmap deliverables—we closed the QA blockers this morning...\n\nBest,\n${
-                    preferredName || 'Alex'
-                  }`}
-                  className="w-full px-4 py-3 rounded-xl border border-white/[0.08] bg-[#121520] text-slate-100 text-sm placeholder:text-slate-500 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all font-sans leading-relaxed outline-none"
-                />
-                <div className="text-right text-xs text-slate-500 mt-1">
-                  {styleSample.trim()
-                    ? `${styleSample.trim().split(/\s+/).length} words provided`
-                    : 'Optional — you can skip this step'}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 6: CONFIRMATION & COMPLETION */}
-          {currentStep === 6 && (
-            <div className="animate-in fade-in duration-200 text-center py-4">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
-                <CheckCircle2 className="w-7 h-7 text-cyan-400" />
-              </div>
-
-              <h2 className="text-2xl font-bold text-white mb-2 font-mono">
-                You&apos;re ready to write with LOOM AI
-              </h2>
-              <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
-                We configured your workspace for{' '}
-                <span className="text-white font-semibold">{preferredName}</span> with a{' '}
-                <span className="text-cyan-400 font-semibold">{preferredStyle}</span> style
-                tailored for{' '}
-                <span className="text-white font-semibold">{emailPurpose}</span> communication.
-              </p>
-
-              <div className="bg-[#121520] border border-white/[0.08] rounded-xl p-4 text-left max-w-md mx-auto text-xs space-y-2 mb-6">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Name:</span>
-                  <span className="font-medium text-white">{preferredName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Category:</span>
-                  <span className="font-medium text-white">{userCategory}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Purpose:</span>
-                  <span className="font-medium text-white">{emailPurpose}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Baseline Style:</span>
-                  <span className="font-medium text-white">{preferredStyle}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Style Sample:</span>
-                  <span className="font-medium text-white">
-                    {styleSample.trim() ? 'Configured' : 'Skipped (can add anytime)'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Controls */}
-          <div className="mt-8 pt-6 border-t border-white/[0.08] flex items-center justify-between gap-4">
-            {currentStep > 1 && currentStep < totalSteps ? (
-              <button
-                type="button"
-                onClick={() => setCurrentStep((prev) => prev - 1)}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-[#121520] hover:bg-[#181b28] text-slate-300 text-xs font-medium transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back</span>
+          <div className="flex items-center gap-2">
+            {currentStep === 5 && !styleSample.trim() && (
+              <button type="button" onClick={() => setCurrentStep(6)} className="btn btn-ghost">
+                Skip for now
               </button>
-            ) : (
-              <div />
             )}
 
-            <div className="flex items-center gap-2">
-              {currentStep === 5 && !styleSample.trim() && (
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep(6)}
-                  className="px-4 py-2.5 rounded-xl text-slate-400 hover:text-white text-xs font-medium transition-colors cursor-pointer"
-                >
-                  Skip for now
-                </button>
-              )}
-
-              {currentStep < totalSteps ? (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white text-xs font-semibold shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
-                >
-                  <span>Continue</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleFinish}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white text-sm font-semibold shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  ) : (
-                    <>
-                      <span>Enter Workspace</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+            {currentStep < totalSteps ? (
+              <button type="button" onClick={handleNext} className="btn btn-primary">
+                <span>Continue</span>
+                <ArrowRight className="size-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleFinish}
+                disabled={isSaving}
+                className="btn btn-primary btn-lg"
+              >
+                {isSaving ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Enter workspace</span>
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-2xl mx-auto text-center pt-4 text-[11px] text-slate-500 relative z-10 font-mono">
-        LOOM AI — Personalization Engine
+      <footer className="mx-auto w-full max-w-xl pb-6 text-center text-xs text-fg-faint">
+        Loom.ai — Personalization engine
       </footer>
     </div>
   );

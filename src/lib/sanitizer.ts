@@ -10,7 +10,9 @@ export function sanitizeModelOutput(text: string): string {
   return text
     // Specific compound phrases first
     .replace(/\bGoogle\s+Gemini(?:\s+(?:3\.[0-9]+|Flash|Pro|Ultra|Nano|Live|Lite))?\b/gi, 'LOOM AI')
-    .replace(/\bGemini[\s-]?(?:3\.[0-9]+[\s-]?)?(?:Flash|Pro|Ultra|Nano|Live|Lite)?\b/gi, 'LOOM AI')
+    // Optional version / variant suffixes must be consumed together with their separator, otherwise
+    // the separator alone was swallowed ("Gemini is" -> "LOOM AIis").
+    .replace(/\bGemini(?:[\s-]+\d+(?:\.\d+)?(?![\w.]))?(?:[\s-]+(?:Flash|Pro|Ultra|Nano|Live|Lite)\b)*/gi, 'LOOM AI')
     .replace(/\bGemini\b/gi, 'LOOM AI')
     
     // Provider attributions

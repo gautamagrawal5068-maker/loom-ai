@@ -10,10 +10,10 @@ export async function humanizeText(text: string): Promise<string> {
     return text;
   }
 
+  const controller = new AbortController();
+  // Covers the whole exchange (headers + body read) and is always cleared in `finally`
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
-
     const response = await fetch('https://rewriteai.com/api/v1/humanize', {
       method: 'POST',
       headers: {
@@ -24,18 +24,20 @@ export async function humanizeText(text: string): Promise<string> {
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
-
     if (response.ok) {
       const data = await response.json();
-      if (data?.results && Array.isArray(data.results) && data.results[0]?.text) {
-        return data.results[0].text.trim();
+      const humanized = Array.isArray(data?.results) ? data.results[0]?.text : undefined;
+      if (typeof humanized === 'string' && humanized.trim()) {
+        return humanized.trim();
       }
     } else {
-      console.warn(`RewriteAI API returned ${response.status}:`, await response.text().catch(() => ''));
+      const errBody = await response.text().catch(() => '');
+      console.warn(`RewriteAI API returned ${response.status}:`, errBody.slice(0, 500));
     }
   } catch (err) {
     console.warn('RewriteAI Humanizer call failed, using original draft:', err);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   return text;

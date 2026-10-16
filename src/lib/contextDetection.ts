@@ -10,8 +10,12 @@ export function detectOffContext(text: string): { isOffContext: boolean; reason?
   const lower = text.toLowerCase().trim();
 
   // Math queries: formulas, arithmetic, equations, calculus, solving for x, etc.
-  const mathFormula = /\b(solve for|evaluate|simplify|derivative|integral|integrate|d\/dx|matrix|pythagorean|trigonometry|quadratic|logarithm)\b/i;
-  const mathSymbols = /[-+]?\b\d+[\s]*[\+\-\*\/÷\^%×][\s]*\d+\b/;
+  // Note: bare "evaluate", "simplify", "integrate" and "matrix" are everyday business words
+  // ("evaluate the proposal", "integrate with Slack") and must not trigger the off-context surcharge.
+  const mathFormula = /\b(solve for|(?:evaluate|simplify|differentiate|integrate)\s+(?:the\s+|this\s+)?(?:expression|equation|integral|function|fraction|polynomial|derivative|limit)|derivative of|integral of|d\/dx|pythagorean|trigonometry|quadratic|logarithm)\b/i;
+  // Arithmetic like "25*4", "2 + 2", "12 / 4". "-" and "/" only count when spaced, so dates
+  // (10/16, 2026-10-16), phone numbers (555-1234) and ranges (1-2 paragraphs) are not math.
+  const mathSymbols = /(?<![\w./:-])\d+(?:\.\d+)?(?:\s*[+*×÷^]\s*|\s+[-/]\s+)\d+(?:\.\d+)?(?![\w./:-])/;
   const mathKeywords = [
     'equation',
     'algebra',
